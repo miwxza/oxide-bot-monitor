@@ -8,15 +8,20 @@
 <link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
 <style>
   :root {
-    --bg: #0f1720; --panel: #17212c; --panel-2: #1d2935; --line: #2a3a49; --text: #e6edf3; --muted: #8b9bab;
-    --green: #3fd58b; --green-bg: #12382a; --red: #ff6b7a; --red-bg: #3d1820; --amber: #f5c04a; --amber-bg: #3a2f12;
-    --blue: #5cc8ff; --blue-bg: #11324a; --gray-bg: #26323e; --radius: 16px;
+    --bg: #f3f2f6; --panel: #ffffff; --panel-2: #eeebf5; --line: #ddd9e9; --text: #30283f; --muted: #6b617c;
+    --green: #256344; --green-bg: #e5f0e3; --red: #b4233c; --red-bg: #fcecef; --amber: #895700; --amber-bg: #fff3d6;
+    --blue: #6941b4; --blue-bg: #efe9fa; --gray-bg: #eae7ef; --radius: 16px;
   }
+  :root { color-scheme: light; }
   * { box-sizing: border-box; }
-  body { margin: 0; background: radial-gradient(1200px 600px at 10% -10%, #1b2a3a 0, var(--bg) 60%); color: var(--text);
+  h1 { color: #493075; }
+  .orders-table thead { background: #f0ecf7; }
+  .orders-table tbody tr:hover { background: #f8f5fd; }
+  #btn-deploy-all, #order-form button { background: #6941b4; border-color: #6941b4; color: #fff; }
+  body { margin: 0; background: linear-gradient(180deg, #ece7f5 0, var(--bg) 420px); color: var(--text);
          font: 14px/1.5 Kanit, system-ui, sans-serif; min-height: 100vh; }
-  .wrap { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; display: grid; gap: 14px; }
-  .card { background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+  .wrap { max-width: 1520px; margin: 0 auto; padding: 20px 16px 60px; display: grid; gap: 14px; }
+  .card { background: var(--panel); box-shadow: 0 3px 14px rgba(67, 46, 95, .045); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
   .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
   .between { justify-content: space-between; }
   .muted { color: var(--muted); } .small { font-size: 12px; } .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
@@ -24,10 +29,10 @@
   .brand { color: var(--blue); letter-spacing: .25em; font-size: 11px; font-weight: 600; }
   button { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
            padding: 7px 14px; cursor: pointer; transition: filter .15s; }
-  button:hover:not(:disabled) { filter: brightness(1.25); } button:disabled { opacity: .4; cursor: not-allowed; }
-  button.green { background: var(--green-bg); border-color: #2c7a55; color: #c7f5dd; }
-  button.red { background: var(--red-bg); border-color: #7a2c37; color: #ffd0d5; }
-  button.blue { background: var(--blue-bg); border-color: #2a6488; }
+  button:hover:not(:disabled) { filter: brightness(.96); } button:disabled { opacity: .5; cursor: not-allowed; }
+  button.green { background: var(--green-bg); border-color: #add6bf; color: var(--green); }
+  button.red { background: var(--red-bg); border-color: #edbcc5; color: var(--red); }
+  button.blue { background: var(--blue-bg); border-color: #cfbfea; color: var(--blue); }
   input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
   .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid transparent; white-space: nowrap; }
   .pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
@@ -38,7 +43,7 @@
   .state-on { color: var(--green); } .state-off { color: var(--red); }
   .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
   .stat .n { font-size: 30px; font-weight: 600; line-height: 1.2; }
-  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+  .grid { display: grid; grid-template-columns: repeat(3, minmax(0, 1fr)); gap: 12px; }
   .bot { border-left: 3px solid var(--line); display: grid; gap: 10px; }
   .bot.s-active { border-left-color: var(--green); } .bot.s-standby { border-left-color: var(--amber); }
   .bot.s-in_progress { border-left-color: var(--blue); } .bot.s-offline { border-left-color: #55606b; opacity: .8; }
@@ -48,21 +53,44 @@
   .kv b { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
   .kv span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
   .last { border-radius: 10px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); }
-  .last.done { background: #10291f; border-color: #235a40; } .last.failed { background: #2d141a; border-color: #5a2330; }
+  .last.done { background: var(--green-bg); border-color: #b8dcc8; } .last.failed { background: var(--red-bg); border-color: #edc5cd; }
   .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; } .btns .wide { grid-column: span 3; }
   table { width: 100%; border-collapse: collapse; font-size: 13px; }
   th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
   th { color: var(--muted); font-weight: 400; font-size: 12px; }
-  .two { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+  .two { display: grid; grid-template-columns: minmax(0, 1.65fr) minmax(300px, 1fr); gap: 14px; align-items: start; }
   .pkg { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
-  .pkg.latest { border-color: #2c7a55; background: #10291f; }
-  .list { display: grid; gap: 6px; max-height: 260px; overflow: auto; }
+  .pkg.latest { border-color: #cbb8e9; background: #f2edfa; }
+  .list { display: grid; align-content: start; gap: 6px; max-height: 260px; overflow: auto; }
   dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); width: min(960px, 96vw); max-height: 88vh; padding: 0; }
-  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog::backdrop { background: rgba(42,30,62,.35); }
   dialog .body { padding: 18px; overflow: auto; max-height: 80vh; display: grid; gap: 14px; }
   .toast { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 10; }
   .toast div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; max-width: 360px; }
-  .toast .err { border-color: #7a2c37; } .table-wrap { overflow-x: auto; }
+  .toast .err { border-color: #edbcc5; } .table-wrap { overflow-x: auto; }
+  .two > *, .grid > * { min-width: 0; }
+  .package-columns { grid-template-columns: 1fr 1fr; }
+  .package-columns .list { max-height: 170px; }
+  .pkg { overflow-wrap: anywhere; }
+  input[type=file] { max-width: 260px; font-size: 12px; }
+  input[type=file]::file-selector-button { font: inherit; color: var(--text); background: var(--panel-2); border: 0; border-radius: 5px; padding: 5px 9px; margin-right: 8px; cursor: pointer; }
+  .orders-table { min-width: 760px; }
+  .orders-table th { white-space: nowrap; }
+  .orders-table th, .orders-table td { padding: 12px 9px; }
+  .orders-table td:nth-child(1) { min-width: 175px; white-space: nowrap; }
+  .orders-table td:nth-child(3), .orders-table td:nth-child(4) { white-space: nowrap; }
+  .orders-table td:nth-child(3) { min-width: 82px; }
+  .orders-table td:nth-child(5) { min-width: 175px; overflow-wrap: anywhere; }
+  .order-actions { display: flex; gap: 6px; flex-wrap: nowrap; min-width: 155px; }
+  .order-actions button { white-space: nowrap; font-size: 12px; padding: 6px 10px; }
+  .alert-history { max-height: 510px; }
+  .alert-message { margin-top: 8px; overflow-wrap: anywhere; }
+  .empty { padding: 18px 10px; color: var(--muted); text-align: center; }
+  .last { min-height: 72px; overflow-wrap: anywhere; }
+  #order-counts { display: flex; flex-wrap: wrap; gap: 5px 10px; margin: 8px 0; }
+  button:focus-visible, input:focus-visible, select:focus-visible { outline: 2px solid var(--blue); outline-offset: 3px; }
+  @media (max-width: 1100px) { .two { grid-template-columns: 1fr; } .grid { grid-template-columns: repeat(2, minmax(0, 1fr)); } }
+  @media (max-width: 600px) { .grid, .package-columns { grid-template-columns: 1fr; } .wrap { padding: 12px 10px 30px; } .card { padding: 14px; } h1 { font-size: 23px; } #order-form > * { width: 100%; } }
   @media (max-width: 900px) { .two { grid-template-columns: 1fr; } .stats { grid-template-columns: repeat(2, 1fr); } }
 </style>
 </head>
@@ -71,12 +99,12 @@
   <header class="card row between">
     <div class="row">
       <div class="avatar" style="background:var(--blue-bg);color:var(--blue)">◇</div>
-      <div><div class="brand">OXIDE</div><h1>Bot Monitor</h1><div class="muted small">ศูนย์ควบคุมบอท · ข้อมูลอัปเดตแบบ real-time ผ่าน WebSocket</div></div>
+      <div><div class="brand">OXIDE</div><h1>Bot Monitor</h1><div class="muted small">ติดตามเครื่องบอทและออเดอร์แบบเรียลไทม์</div></div>
     </div>
     <div class="row">
       <span id="live" class="pill p-gray">กำลังเชื่อมต่อ…</span>
-      <input id="actor" placeholder="ชื่อผู้ใช้ (audit)" style="width:150px">
-      <button id="btn-token" title="ตั้งค่า Admin Token">🔑</button>
+      <input id="actor" aria-label="ชื่อผู้สั่งงาน" placeholder="ชื่อผู้สั่งงาน" style="width:150px">
+      <button id="btn-token" title="ตั้งค่า Admin Token">ตั้งค่า Token</button>
       <button id="btn-refresh">รีเฟรช</button>
     </div>
   </header>
@@ -101,12 +129,12 @@
         <div class="muted small" id="pkg-meta">อัปโหลดไฟล์ .zip แล้วกดอัปเดตทุกเครื่อง หรือกด "อัปเดตโค้ด" บนการ์ดรายเครื่อง</div>
       </div>
       <div class="row">
-        <label class="row small muted"><input type="file" id="pkg-file" accept=".zip" style="max-width:220px"></label>
+        <label class="row small muted"><input type="file" id="pkg-file" aria-label="เลือกแพ็กเกจ ZIP" accept=".zip"></label>
         <button id="btn-upload">อัปโหลดแพ็กเกจ</button>
         <button class="green" id="btn-deploy-all">อัปเดตทุกเครื่อง</button>
       </div>
     </div>
-    <div class="two" style="margin-top:12px">
+    <div class="two package-columns" style="margin-top:12px">
       <div class="list" id="pkg-list"></div>
       <div class="list" id="deploy-list"></div>
     </div>
@@ -115,7 +143,7 @@
   <section class="stats">
     <div class="card stat"><h2>เครื่องออนไลน์</h2><div class="n" id="s-online">–</div><div class="muted small" id="s-total"></div></div>
     <div class="card stat"><h2>บอทเปิดรับงาน (active)</h2><div class="n state-on" id="s-active">–</div></div>
-    <div class="card stat"><h2>รับรอ (standby)</h2><div class="n" style="color:var(--amber)" id="s-standby">–</div></div>
+    <div class="card stat"><h2>พร้อมรอ (Standby)</h2><div class="n" style="color:var(--amber)" id="s-standby">–</div></div>
     <div class="card stat"><h2>กำลังทำงาน (in progress)</h2><div class="n" style="color:var(--blue)" id="s-progress">–</div></div>
   </section>
 
@@ -138,11 +166,12 @@
         </select>
         <button class="blue" type="submit">สร้างออเดอร์ + จ่ายเงิน (demo)</button>
       </form>
-      <div class="table-wrap"><table><thead><tr><th>ออเดอร์</th><th>สถานะ</th><th>เครื่อง</th><th>ครั้งที่</th><th>error</th><th></th></tr></thead><tbody id="orders"></tbody></table></div>
+      <div class="table-wrap" tabindex="0" aria-label="ตารางออเดอร์ เลื่อนแนวนอนได้"><table class="orders-table"><thead><tr><th>ออเดอร์ / UID</th><th>สถานะ</th><th>เครื่อง</th><th>ครั้งที่</th><th>ข้อผิดพลาดล่าสุด</th><th>จัดการ</th></tr></thead><tbody id="orders"></tbody></table></div>
     </div>
     <div class="card">
-      <h2>การแจ้งเตือน</h2>
-      <div class="list" id="alerts" style="max-height:420px"></div>
+      <h2>ประวัติการแจ้งเตือน</h2>
+      <p class="muted small" style="margin:4px 0 12px">เหตุการณ์ที่ผ่านมา อาจไม่ตรงกับสถานะเครื่องในขณะนี้</p>
+      <div class="list alert-history" id="alerts"></div>
     </div>
   </section>
 </div>
@@ -202,12 +231,22 @@ function askToken() {
 
 // ---------- render ----------
 const STATE = {
-  active: ['p-green', 'เปิดรับงาน'], standby: ['p-amber', 'standby'], in_progress: ['p-blue', 'กำลังทำงาน'], offline: ['p-gray', 'ออฟไลน์'],
+  active: ['p-green', 'เปิดรับงาน'], standby: ['p-amber', 'รอรับงาน'], in_progress: ['p-blue', 'กำลังทำงาน'], offline: ['p-gray', 'ออฟไลน์'],
 };
 const ORDER = {
   COMPLETED: 'p-green', QUEUED: 'p-blue', IN_PROGRESS: 'p-blue', PENDING_PAYMENT: 'p-gray', DELAYED: 'p-amber',
   FAILED: 'p-red', EXPIRED: 'p-gray', CANCELLED: 'p-gray',
 };
+
+// วาดใหม่เฉพาะส่วนที่ข้อมูลเปลี่ยน: snapshot มาทุก 2 วินาที ถ้าวาดทั้งหน้าทุกครั้ง
+// ปุ่มจะถูกแทนที่ระหว่างที่ผู้ใช้กำลังคลิก (คลิกหาย) และโฟกัสคีย์บอร์ดหลุด
+const rendered = {};
+function renderIfChanged(key, data, draw) {
+  const sig = JSON.stringify(data);
+  if (rendered[key] === sig) return;
+  rendered[key] = sig;
+  draw();
+}
 
 function render(s) {
   snap = s;
@@ -215,7 +254,7 @@ function render(s) {
   $('sys-state').textContent = on ? 'ทั้งระบบ: เปิด' : 'ทั้งระบบ: ปิด (kill-switch)';
   $('sys-state').className = 'big ' + (on ? 'state-on' : 'state-off');
   $('sys-note').textContent = on
-    ? 'ปิดทั้งระบบแล้ว ทุกเครื่องจะไม่รับออเดอร์ใหม่ (งานที่กำลังทำอยู่ทำต่อจนจบ)'
+    ? 'ทุกเครื่องที่พร้อมสามารถรับงานใหม่ได้ เมื่อปิดระบบ งานที่เริ่มแล้วจะทำต่อจนจบ'
     : `ปิดโดย ${s.system.changed_by ?? '-'} เมื่อ ${fmtTime(s.system.changed_at)} — ไม่มีเครื่องไหนรับงานใหม่`;
   $('btn-resume').disabled = on; $('btn-kill').disabled = !on;
 
@@ -227,27 +266,33 @@ function render(s) {
   $('pkg-latest').textContent = latest ? `แพ็กล่าสุด: ${latest.filename} · ${fmtSize(Number(latest.size_bytes))}` : 'ยังไม่มีแพ็กเกจ';
   $('pkg-meta').textContent = latest ? `sha256 ${latest.sha256.slice(0, 12)} · อัปโหลดโดย ${latest.uploaded_by} เมื่อ ${fmtTime(latest.created_at)}` : 'อัปโหลดไฟล์ .zip แล้วกดอัปเดตทุกเครื่อง';
   $('btn-deploy-all').disabled = !latest;
-  $('pkg-list').replaceChildren(...s.packages.map((p, i) => h('div', { class: 'pkg row between' + (i === 0 ? ' latest' : '') },
+  renderIfChanged('packages', s.packages, () => $('pkg-list').replaceChildren(...s.packages.map((p, i) => h('div', { class: 'pkg row between' + (i === 0 ? ' latest' : '') },
     h('div', {}, h('div', { class: 'mono' }, p.filename), h('div', { class: 'muted small' }, `${fmtTime(p.created_at)} · ${p.sha256.slice(0, 12)}${i === 0 ? ' ← ตัวที่ใช้อัปเดตตอนนี้' : ''}`)),
-    h('button', { class: 'red', onclick: () => confirm(`ลบ ${p.filename}?`) && act('ลบแพ็กเกจ', () => api('DELETE', `/packages/${p.id}`)) }, 'ลบ'))));
-  $('deploy-list').replaceChildren(...(s.deployments.length ? s.deployments.map((d) => h('div', { class: 'pkg row between' },
+    h('button', { class: 'red', onclick: () => confirm(`ลบ ${p.filename}?`) && act('ลบแพ็กเกจ', () => api('DELETE', `/packages/${p.id}`)) }, 'ลบ')))));
+  renderIfChanged('deployments', s.deployments, () => $('deploy-list').replaceChildren(...(s.deployments.length ? s.deployments.map((d) => h('div', { class: 'pkg row between' },
     h('span', { class: 'small' }, `${d.bot_id} ← ${d.filename}`),
-    h('span', { class: 'pill ' + ({ applied: 'p-green', failed: 'p-red', sent: 'p-blue', queued: 'p-amber' }[d.status]) }, d.status + (d.error ? `: ${d.error}` : '')))) : [h('div', { class: 'muted small' }, 'ยังไม่มีประวัติการอัปเดต')]));
+    h('span', { class: 'pill ' + ({ applied: 'p-green', failed: 'p-red', sent: 'p-blue', queued: 'p-amber' }[d.status]) }, ({ applied: 'รับแพ็กเกจแล้ว', failed: 'ไม่สำเร็จ', sent: 'ส่งแล้ว', queued: 'รอส่ง' }[d.status] ?? d.status) + (d.error ? `: ${d.error}` : '')))) : [h('div', { class: 'muted small' }, 'ยังไม่มีประวัติการอัปเดต')])));
 
-  $('bots').replaceChildren(...s.bots.map(botCard));
+  // อายุ heartbeat เปลี่ยนทุกรอบ → อัปเดตเฉพาะข้อความ ไม่สร้างการ์ดใหม่
+  const botShape = s.bots.map(({ heartbeat_age_s, last_heartbeat, ...rest }) => rest);
+  renderIfChanged('bots', [botShape, latest?.id ?? null], () => $('bots').replaceChildren(...s.bots.map(botCard)));
+  for (const b of s.bots) {
+    const el = document.querySelector(`[data-age-for="${CSS.escape(b.id)}"]`);
+    if (el) { el.textContent = ago(b.heartbeat_age_s); el.title = fmtTime(b.last_heartbeat); }
+  }
 
-  $('order-counts').textContent = Object.entries(s.order_counts).map(([k, v]) => `${k} ${v}`).join(' · ');
-  $('orders').replaceChildren(...s.orders.map((o) => h('tr', {},
+  renderIfChanged('order-counts', s.order_counts, () => $('order-counts').replaceChildren(...Object.entries(s.order_counts).map(([k, v]) => h('span', {}, `${k} ${v}`))));
+  renderIfChanged('orders', s.orders, () => $('orders').replaceChildren(...s.orders.map((o) => h('tr', {},
     h('td', { class: 'mono' }, o.external_order_id, h('div', { class: 'muted small' }, o.player_uid ?? '')),
     h('td', {}, h('span', { class: 'pill ' + (ORDER[o.status] ?? 'p-gray') }, o.status)),
     h('td', {}, o.assigned_bot_id ?? '—'), h('td', {}, o.attempts),
-    h('td', { class: 'small' }, o.last_error_code ?? ''),
-    h('td', {}, h('button', { onclick: () => showOrder(o.external_order_id) }, 'timeline'),
-      ['DELAYED', 'FAILED'].includes(o.status) ? h('button', { onclick: () => act('requeue', () => api('POST', `/orders/${o.external_order_id}/requeue`, {})) }, 'ลองใหม่') : null))));
+    h('td', { class: 'small' }, o.last_error_code ? h('div', {}, o.last_error_code, o.status === 'COMPLETED' ? h('div', { class: 'muted small' }, 'เกิดก่อนงานสำเร็จ') : null) : '—'),
+    h('td', {}, h('div', { class: 'order-actions' }, h('button', { onclick: () => showOrder(o.external_order_id) }, 'ประวัติ'),
+      ['DELAYED', 'FAILED'].includes(o.status) ? h('button', { onclick: () => retryOrder(o) }, 'ลองใหม่') : null))))));
 
-  $('alerts').replaceChildren(...(s.alerts.length ? s.alerts.map((a) => h('div', { class: 'pkg' },
+  renderIfChanged('alerts', s.alerts, () => $('alerts').replaceChildren(...(s.alerts.length ? s.alerts.map((a) => h('div', { class: 'pkg' },
     h('div', { class: 'row between' }, h('span', { class: 'pill ' + (a.severity === 'critical' ? 'p-red' : 'p-amber') }, a.kind), h('span', { class: 'muted small' }, fmtTime(a.created_at))),
-    h('div', { class: 'small' }, a.message))) : [h('div', { class: 'muted small' }, 'ไม่มีการแจ้งเตือน')]));
+    h('div', { class: 'small alert-message' }, a.message))) : [h('div', { class: 'muted small' }, 'ไม่มีการแจ้งเตือน')])));
 }
 
 function botCard(b) {
@@ -262,20 +307,20 @@ function botCard(b) {
       h('div', { class: 'row' }, h('div', { class: 'avatar' }, b.name.replace(/[^A-Z0-9]/gi, '').slice(-2) || 'B'),
         h('div', {}, h('b', {}, b.name), h('div', { class: 'muted small mono' }, b.device_name))),
       h('div', { style: 'display:grid;gap:4px;justify-items:end' },
-        h('span', { class: 'pill ' + (b.heartbeat_ok ? 'p-green' : 'p-gray') }, b.heartbeat_ok ? 'Online' : 'Offline'),
+        h('span', { class: 'pill ' + (b.heartbeat_ok ? 'p-green' : 'p-gray') }, b.heartbeat_ok ? 'เครื่องออนไลน์' : 'เครื่องออฟไลน์'),
         h('span', { class: 'pill ' + cls }, label))),
     h('div', { class: 'kv' },
       h('div', {}, h('b', {}, 'Host'), h('span', { class: 'mono', title: b.host ?? '' }, b.host ?? '—')),
-      h('div', {}, h('b', {}, 'Heartbeat'), h('span', { title: fmtTime(b.last_heartbeat) }, ago(b.heartbeat_age_s))),
-      h('div', {}, h('b', {}, 'Bot process'), h('span', {}, b.process_status)),
+      h('div', {}, h('b', {}, 'Heartbeat'), h('span', { 'data-age-for': b.id, title: fmtTime(b.last_heartbeat) }, ago(b.heartbeat_age_s))),
+      h('div', {}, h('b', {}, 'โปรแกรมบอท'), h('span', {}, ({ online: 'เปิดอยู่', offline: 'หยุดอยู่', starting: 'กำลังเปิด', stopping: 'กำลังหยุด', error: 'ขัดข้อง' }[b.process_status] ?? b.process_status))),
       h('div', {}, h('b', {}, 'CPU / RAM'), h('span', {}, `${Number(b.cpu_percent).toFixed(0)}% / ${Number(b.memory_percent).toFixed(0)}%`)),
       h('div', {}, h('b', {}, 'งานปัจจุบัน'), h('span', { class: 'mono' }, b.current_order ?? '—')),
       h('div', {}, h('b', {}, 'เวอร์ชันโค้ด'), h('span', { class: 'mono' }, b.code_version ?? '—'))),
-    h('div', { class: 'last ' + jobCls }, h('div', { class: 'muted small' }, 'สถานะล่าสุด'), h('div', { class: 'small' }, jobText)),
+    h('div', { class: 'last ' + jobCls }, h('div', { class: 'muted small' }, 'ผลงานล่าสุด'), h('div', { class: 'small' }, jobText)),
     h('div', { class: 'btns' },
       h('button', { class: 'green', onclick: cmd('start', 'เปิดบอท'), disabled: b.process_status === 'online' }, 'เปิดบอท'),
       h('button', { class: 'red', onclick: cmd('stop', 'ปิดบอท'), disabled: b.process_status === 'offline' }, 'ปิดบอท'),
-      h('button', { onclick: cmd('restart', 'restart') }, 'restart'),
+      h('button', { onclick: cmd('restart', 'รีสตาร์ต') }, 'รีสตาร์ต'),
       h('button', { class: 'wide', onclick: () => showBot(b.id) }, 'รายละเอียด (log / metrics)'),
       h('button', { class: 'wide blue', disabled: !latest, onclick: () => act(`อัปเดตโค้ด ${b.id}`, () => api('POST', `/packages/${latest.id}/deploy`, { bot_ids: [b.id] })) }, 'อัปเดตโค้ด')));
 }
@@ -303,13 +348,22 @@ async function showBot(id) {
     $('detail').showModal();
   } catch (e) { toast(e.message, true); }
 }
+async function retryOrder(order) {
+  const uncertain = order.last_error_code === 'TOPUP_STATUS_UNKNOWN';
+  const message = uncertain
+    ? `ออเดอร์ ${order.external_order_id} ยังไม่ทราบผลการเติม รายการเดิมอาจสำเร็จแล้ว\n\nกรุณาตรวจผลจากผู้ให้บริการก่อนส่งซ้ำ เพื่อป้องกันการเติมซ้ำ\n\nตรวจสอบแล้วว่าควรส่งรายการนี้กลับเข้าคิวใช่หรือไม่?`
+    : `ส่งออเดอร์ ${order.external_order_id} กลับเข้าคิวเพื่อลองใหม่ใช่หรือไม่?`;
+  if (!confirm(message)) return;
+  await act('ส่งออเดอร์กลับเข้าคิว', () => api('POST', `/orders/${encodeURIComponent(order.external_order_id)}/requeue`, {}));
+}
+
 async function showOrder(id) {
   try {
     const [o, events] = await Promise.all([api('GET', `/orders/${id}`), api('GET', `/orders/${id}/timeline`)]);
     $('detail-body').replaceChildren(
       h('div', { class: 'row between' }, h('h1', {}, id), h('button', { onclick: () => $('detail').close() }, 'ปิด')),
       h('div', { class: 'row' }, h('span', { class: 'pill ' + (ORDER[o.status] ?? 'p-gray') }, o.status), h('span', { class: 'muted' }, `UID ${o.player_uid} · ${o.amount} ${o.currency} · ครั้งที่ ${o.attempts}`)),
-      h('h2', {}, 'Timeline'),
+      h('h2', {}, 'ประวัติออเดอร์'),
       table([[(r) => fmtTime(r.created_at), 'เวลา'], ['event_type', 'เหตุการณ์'],
         [(r) => r.payload?.from ? `${r.payload.from} → ${r.payload.to}` : '', 'สถานะ'],
         [(r) => [r.payload?.reason, r.payload?.bot_id, r.payload?.code].filter(Boolean).join(' · '), 'รายละเอียด']], events));

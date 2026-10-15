@@ -22,6 +22,8 @@ docker compose up -d --build
 | http://localhost:3000/docs | Swagger (ใส่ `X-Admin-Token: dev-admin-token`) |
 | http://localhost:8788/bots | Bot Simulator จาก candidate pack |
 
+ถ้า `localhost` ไม่ตอบ (บาง Windows ที่ Docker Desktop ส่งต่อ IPv6 ไม่ได้) ใช้ `http://127.0.0.1:3000` แทน
+
 Compose รัน 4 service: `postgres` (จาก pack), `simulator` (จาก pack ไม่ได้แก้), `api` และ `agents` (บอทจำลอง 3 เครื่อง `bot-01..03` แต่ละเครื่องเป็น process แยก)
 
 ปิดระบบ: `docker compose down` (ล้างข้อมูลด้วย `docker compose down -v`)
