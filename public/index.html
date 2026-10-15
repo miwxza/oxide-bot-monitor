@@ -1,0 +1,368 @@
+<!doctype html>
+<html lang="th">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>Oxide Bot Monitor</title>
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link href="https://fonts.googleapis.com/css2?family=Kanit:wght@400;500;600&family=JetBrains+Mono:wght@400;500&display=swap" rel="stylesheet">
+<style>
+  :root {
+    --bg: #0f1720; --panel: #17212c; --panel-2: #1d2935; --line: #2a3a49; --text: #e6edf3; --muted: #8b9bab;
+    --green: #3fd58b; --green-bg: #12382a; --red: #ff6b7a; --red-bg: #3d1820; --amber: #f5c04a; --amber-bg: #3a2f12;
+    --blue: #5cc8ff; --blue-bg: #11324a; --gray-bg: #26323e; --radius: 16px;
+  }
+  * { box-sizing: border-box; }
+  body { margin: 0; background: radial-gradient(1200px 600px at 10% -10%, #1b2a3a 0, var(--bg) 60%); color: var(--text);
+         font: 14px/1.5 Kanit, system-ui, sans-serif; min-height: 100vh; }
+  .wrap { max-width: 1280px; margin: 0 auto; padding: 20px 16px 60px; display: grid; gap: 14px; }
+  .card { background: color-mix(in srgb, var(--panel) 92%, transparent); border: 1px solid var(--line); border-radius: var(--radius); padding: 16px 18px; }
+  .row { display: flex; align-items: center; gap: 10px; flex-wrap: wrap; }
+  .between { justify-content: space-between; }
+  .muted { color: var(--muted); } .small { font-size: 12px; } .mono { font-family: 'JetBrains Mono', monospace; font-size: 12px; }
+  h1 { margin: 0; font-size: 26px; line-height: 1.1; } h2 { margin: 0 0 4px; font-size: 13px; font-weight: 500; color: var(--muted); }
+  .brand { color: var(--blue); letter-spacing: .25em; font-size: 11px; font-weight: 600; }
+  button { font: inherit; color: var(--text); background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px;
+           padding: 7px 14px; cursor: pointer; transition: filter .15s; }
+  button:hover:not(:disabled) { filter: brightness(1.25); } button:disabled { opacity: .4; cursor: not-allowed; }
+  button.green { background: var(--green-bg); border-color: #2c7a55; color: #c7f5dd; }
+  button.red { background: var(--red-bg); border-color: #7a2c37; color: #ffd0d5; }
+  button.blue { background: var(--blue-bg); border-color: #2a6488; }
+  input, select { font: inherit; color: var(--text); background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; }
+  .pill { display: inline-flex; align-items: center; gap: 6px; padding: 2px 10px; border-radius: 999px; font-size: 12px; border: 1px solid transparent; white-space: nowrap; }
+  .pill::before { content: ''; width: 7px; height: 7px; border-radius: 50%; background: currentColor; }
+  .p-green { color: var(--green); background: var(--green-bg); } .p-red { color: var(--red); background: var(--red-bg); }
+  .p-amber { color: var(--amber); background: var(--amber-bg); } .p-blue { color: var(--blue); background: var(--blue-bg); }
+  .p-gray { color: var(--muted); background: var(--gray-bg); }
+  .big { font-size: 22px; font-weight: 600; }
+  .state-on { color: var(--green); } .state-off { color: var(--red); }
+  .stats { display: grid; grid-template-columns: repeat(4, 1fr); gap: 12px; }
+  .stat .n { font-size: 30px; font-weight: 600; line-height: 1.2; }
+  .grid { display: grid; grid-template-columns: repeat(auto-fill, minmax(270px, 1fr)); gap: 12px; }
+  .bot { border-left: 3px solid var(--line); display: grid; gap: 10px; }
+  .bot.s-active { border-left-color: var(--green); } .bot.s-standby { border-left-color: var(--amber); }
+  .bot.s-in_progress { border-left-color: var(--blue); } .bot.s-offline { border-left-color: #55606b; opacity: .8; }
+  .avatar { width: 36px; height: 36px; border-radius: 10px; display: grid; place-items: center; background: var(--amber-bg); color: var(--amber); font-weight: 600; }
+  .kv { display: grid; grid-template-columns: 1fr 1fr; gap: 8px; }
+  .kv > div { background: var(--bg); border: 1px solid var(--line); border-radius: 10px; padding: 6px 10px; min-width: 0; }
+  .kv b { display: block; font-size: 11px; font-weight: 400; color: var(--muted); }
+  .kv span { display: block; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+  .last { border-radius: 10px; padding: 8px 10px; background: var(--bg); border: 1px solid var(--line); }
+  .last.done { background: #10291f; border-color: #235a40; } .last.failed { background: #2d141a; border-color: #5a2330; }
+  .btns { display: grid; grid-template-columns: 1fr 1fr 1fr; gap: 6px; } .btns .wide { grid-column: span 3; }
+  table { width: 100%; border-collapse: collapse; font-size: 13px; }
+  th, td { text-align: left; padding: 6px 8px; border-bottom: 1px solid var(--line); vertical-align: top; }
+  th { color: var(--muted); font-weight: 400; font-size: 12px; }
+  .two { display: grid; grid-template-columns: 1.4fr 1fr; gap: 14px; }
+  .pkg { padding: 8px 12px; border: 1px solid var(--line); border-radius: 10px; background: var(--bg); }
+  .pkg.latest { border-color: #2c7a55; background: #10291f; }
+  .list { display: grid; gap: 6px; max-height: 260px; overflow: auto; }
+  dialog { background: var(--panel); color: var(--text); border: 1px solid var(--line); border-radius: var(--radius); width: min(960px, 96vw); max-height: 88vh; padding: 0; }
+  dialog::backdrop { background: rgba(0,0,0,.6); }
+  dialog .body { padding: 18px; overflow: auto; max-height: 80vh; display: grid; gap: 14px; }
+  .toast { position: fixed; right: 16px; bottom: 16px; display: grid; gap: 8px; z-index: 10; }
+  .toast div { background: var(--panel-2); border: 1px solid var(--line); border-radius: 10px; padding: 8px 14px; max-width: 360px; }
+  .toast .err { border-color: #7a2c37; } .table-wrap { overflow-x: auto; }
+  @media (max-width: 900px) { .two { grid-template-columns: 1fr; } .stats { grid-template-columns: repeat(2, 1fr); } }
+</style>
+</head>
+<body>
+<div class="wrap">
+  <header class="card row between">
+    <div class="row">
+      <div class="avatar" style="background:var(--blue-bg);color:var(--blue)">◇</div>
+      <div><div class="brand">OXIDE</div><h1>Bot Monitor</h1><div class="muted small">ศูนย์ควบคุมบอท · ข้อมูลอัปเดตแบบ real-time ผ่าน WebSocket</div></div>
+    </div>
+    <div class="row">
+      <span id="live" class="pill p-gray">กำลังเชื่อมต่อ…</span>
+      <input id="actor" placeholder="ชื่อผู้ใช้ (audit)" style="width:150px">
+      <button id="btn-token" title="ตั้งค่า Admin Token">🔑</button>
+      <button id="btn-refresh">รีเฟรช</button>
+    </div>
+  </header>
+
+  <section class="card row between">
+    <div>
+      <h2>Kill-switch ทั้งระบบ</h2>
+      <div class="big" id="sys-state">—</div>
+      <div class="muted small" id="sys-note">ปิดทั้งระบบแล้ว ทุกเครื่องจะไม่รับออเดอร์ใหม่ (งานที่กำลังทำอยู่ทำต่อจนจบ)</div>
+    </div>
+    <div class="row">
+      <button class="green" id="btn-resume">เปิดทั้งระบบ</button>
+      <button class="red" id="btn-kill">ปิดทั้งระบบ</button>
+    </div>
+  </section>
+
+  <section class="card">
+    <div class="row between">
+      <div>
+        <h2>อัปเดตโค้ดบอท</h2>
+        <div class="big" id="pkg-latest">ยังไม่มีแพ็กเกจ</div>
+        <div class="muted small" id="pkg-meta">อัปโหลดไฟล์ .zip แล้วกดอัปเดตทุกเครื่อง หรือกด "อัปเดตโค้ด" บนการ์ดรายเครื่อง</div>
+      </div>
+      <div class="row">
+        <label class="row small muted"><input type="file" id="pkg-file" accept=".zip" style="max-width:220px"></label>
+        <button id="btn-upload">อัปโหลดแพ็กเกจ</button>
+        <button class="green" id="btn-deploy-all">อัปเดตทุกเครื่อง</button>
+      </div>
+    </div>
+    <div class="two" style="margin-top:12px">
+      <div class="list" id="pkg-list"></div>
+      <div class="list" id="deploy-list"></div>
+    </div>
+  </section>
+
+  <section class="stats">
+    <div class="card stat"><h2>เครื่องออนไลน์</h2><div class="n" id="s-online">–</div><div class="muted small" id="s-total"></div></div>
+    <div class="card stat"><h2>บอทเปิดรับงาน (active)</h2><div class="n state-on" id="s-active">–</div></div>
+    <div class="card stat"><h2>รับรอ (standby)</h2><div class="n" style="color:var(--amber)" id="s-standby">–</div></div>
+    <div class="card stat"><h2>กำลังทำงาน (in progress)</h2><div class="n" style="color:var(--blue)" id="s-progress">–</div></div>
+  </section>
+
+  <section>
+    <div class="row between" style="margin:4px 2px 10px"><b>เครื่องทั้งหมด</b><span class="muted small">กด "รายละเอียด" เพื่อดู log / metrics</span></div>
+    <div class="grid" id="bots"></div>
+  </section>
+
+  <section class="two">
+    <div class="card">
+      <div class="row between"><h2>ออเดอร์ล่าสุด</h2><span class="muted small" id="order-counts"></span></div>
+      <form class="row" id="order-form" style="margin:8px 0 10px">
+        <select id="o-uid" title="player_uid กำหนดพฤติกรรมของบอทจำลอง">
+          <option value="12345678">UID ปกติ → สำเร็จ</option>
+          <option value="INVALID001">INVALID001 → UID ผิด (FAILED)</option>
+          <option value="FLAKY001">FLAKY001 → retry แล้ว DELAYED</option>
+          <option value="UNKNOWN001">UNKNOWN001 → ผลไม่แน่นอน (DELAYED)</option>
+          <option value="HANG001">HANG001 → บอทเงียบ (lease หมด)</option>
+          <option value="TOPUPCRASH001">TOPUPCRASH001 → ล่มหลังเติม (ไม่เติมซ้ำ)</option>
+        </select>
+        <button class="blue" type="submit">สร้างออเดอร์ + จ่ายเงิน (demo)</button>
+      </form>
+      <div class="table-wrap"><table><thead><tr><th>ออเดอร์</th><th>สถานะ</th><th>เครื่อง</th><th>ครั้งที่</th><th>error</th><th></th></tr></thead><tbody id="orders"></tbody></table></div>
+    </div>
+    <div class="card">
+      <h2>การแจ้งเตือน</h2>
+      <div class="list" id="alerts" style="max-height:420px"></div>
+    </div>
+  </section>
+</div>
+
+<dialog id="detail"><div class="body" id="detail-body"></div></dialog>
+<div class="toast" id="toast"></div>
+
+<script>
+'use strict';
+const $ = (id) => document.getElementById(id);
+const store = {
+  get(k, d) { try { return localStorage.getItem(k) ?? d; } catch { return d; } },
+  set(k, v) { try { localStorage.setItem(k, v); } catch {} },
+};
+let token = store.get('oxide.token', 'dev-admin-token');
+$('actor').value = store.get('oxide.actor', '');
+$('actor').addEventListener('change', (e) => store.set('oxide.actor', e.target.value.trim()));
+let snap = null;
+
+// ---------- helpers (สร้าง DOM ด้วย textContent เสมอ กัน XSS จากข้อมูลที่ bot ส่งมา) ----------
+function h(tag, attrs = {}, ...children) {
+  const el = document.createElement(tag);
+  for (const [k, v] of Object.entries(attrs)) {
+    if (k === 'class') el.className = v;
+    else if (k.startsWith('on')) el.addEventListener(k.slice(2), v);
+    else if (v !== false && v != null) el.setAttribute(k, v === true ? '' : v);
+  }
+  for (const c of children.flat()) if (c != null && c !== false) el.append(c instanceof Node ? c : String(c));
+  return el;
+}
+const fmtTime = (t) => t ? new Date(t).toLocaleString('th-TH', { hour12: false }) : '—';
+const fmtSize = (n) => n < 1024 * 1024 ? `${(n / 1024).toFixed(1)} KB` : `${(n / 1024 / 1024).toFixed(2)} MB`;
+const ago = (s) => s == null ? 'ไม่เคย' : s < 60 ? `${s} วิที่แล้ว` : s < 3600 ? `${Math.floor(s / 60)} นาทีที่แล้ว` : `${Math.floor(s / 3600)} ชม.ที่แล้ว`;
+function toast(msg, err = false) {
+  const d = h('div', { class: err ? 'err' : '' }, msg);
+  $('toast').append(d);
+  setTimeout(() => d.remove(), 4500);
+}
+
+async function api(method, path, body, extraHeaders = {}) {
+  const headers = { 'x-admin-token': token, 'x-actor': $('actor').value.trim() || 'dashboard', ...extraHeaders };
+  let payload = body;
+  if (body && !(body instanceof FormData)) { headers['content-type'] = 'application/json'; payload = JSON.stringify(body); }
+  const res = await fetch(path, { method, headers, body: payload });
+  const data = res.status === 204 ? null : await res.json().catch(() => null);
+  if (res.status === 401) { askToken(); throw new Error('Admin token ไม่ถูกต้อง'); }
+  if (!res.ok) throw new Error(`${data?.code ?? res.status}: ${data?.message ?? ''}`);
+  return data;
+}
+async function act(label, fn) {
+  try { await fn(); toast(`✓ ${label}`); } catch (e) { toast(`✗ ${label} — ${e.message}`, true); }
+}
+function askToken() {
+  const t = prompt('Admin token', token);
+  if (t) { token = t.trim(); store.set('oxide.token', token); connect(); }
+}
+
+// ---------- render ----------
+const STATE = {
+  active: ['p-green', 'เปิดรับงาน'], standby: ['p-amber', 'standby'], in_progress: ['p-blue', 'กำลังทำงาน'], offline: ['p-gray', 'ออฟไลน์'],
+};
+const ORDER = {
+  COMPLETED: 'p-green', QUEUED: 'p-blue', IN_PROGRESS: 'p-blue', PENDING_PAYMENT: 'p-gray', DELAYED: 'p-amber',
+  FAILED: 'p-red', EXPIRED: 'p-gray', CANCELLED: 'p-gray',
+};
+
+function render(s) {
+  snap = s;
+  const on = s.system.accepting_orders;
+  $('sys-state').textContent = on ? 'ทั้งระบบ: เปิด' : 'ทั้งระบบ: ปิด (kill-switch)';
+  $('sys-state').className = 'big ' + (on ? 'state-on' : 'state-off');
+  $('sys-note').textContent = on
+    ? 'ปิดทั้งระบบแล้ว ทุกเครื่องจะไม่รับออเดอร์ใหม่ (งานที่กำลังทำอยู่ทำต่อจนจบ)'
+    : `ปิดโดย ${s.system.changed_by ?? '-'} เมื่อ ${fmtTime(s.system.changed_at)} — ไม่มีเครื่องไหนรับงานใหม่`;
+  $('btn-resume').disabled = on; $('btn-kill').disabled = !on;
+
+  const sum = s.summary;
+  $('s-online').textContent = sum.online; $('s-total').textContent = `จาก ${sum.total} เครื่อง`;
+  $('s-active').textContent = sum.active; $('s-standby').textContent = sum.standby; $('s-progress').textContent = sum.in_progress;
+
+  const latest = s.packages[0];
+  $('pkg-latest').textContent = latest ? `แพ็กล่าสุด: ${latest.filename} · ${fmtSize(Number(latest.size_bytes))}` : 'ยังไม่มีแพ็กเกจ';
+  $('pkg-meta').textContent = latest ? `sha256 ${latest.sha256.slice(0, 12)} · อัปโหลดโดย ${latest.uploaded_by} เมื่อ ${fmtTime(latest.created_at)}` : 'อัปโหลดไฟล์ .zip แล้วกดอัปเดตทุกเครื่อง';
+  $('btn-deploy-all').disabled = !latest;
+  $('pkg-list').replaceChildren(...s.packages.map((p, i) => h('div', { class: 'pkg row between' + (i === 0 ? ' latest' : '') },
+    h('div', {}, h('div', { class: 'mono' }, p.filename), h('div', { class: 'muted small' }, `${fmtTime(p.created_at)} · ${p.sha256.slice(0, 12)}${i === 0 ? ' ← ตัวที่ใช้อัปเดตตอนนี้' : ''}`)),
+    h('button', { class: 'red', onclick: () => confirm(`ลบ ${p.filename}?`) && act('ลบแพ็กเกจ', () => api('DELETE', `/packages/${p.id}`)) }, 'ลบ'))));
+  $('deploy-list').replaceChildren(...(s.deployments.length ? s.deployments.map((d) => h('div', { class: 'pkg row between' },
+    h('span', { class: 'small' }, `${d.bot_id} ← ${d.filename}`),
+    h('span', { class: 'pill ' + ({ applied: 'p-green', failed: 'p-red', sent: 'p-blue', queued: 'p-amber' }[d.status]) }, d.status + (d.error ? `: ${d.error}` : '')))) : [h('div', { class: 'muted small' }, 'ยังไม่มีประวัติการอัปเดต')]));
+
+  $('bots').replaceChildren(...s.bots.map(botCard));
+
+  $('order-counts').textContent = Object.entries(s.order_counts).map(([k, v]) => `${k} ${v}`).join(' · ');
+  $('orders').replaceChildren(...s.orders.map((o) => h('tr', {},
+    h('td', { class: 'mono' }, o.external_order_id, h('div', { class: 'muted small' }, o.player_uid ?? '')),
+    h('td', {}, h('span', { class: 'pill ' + (ORDER[o.status] ?? 'p-gray') }, o.status)),
+    h('td', {}, o.assigned_bot_id ?? '—'), h('td', {}, o.attempts),
+    h('td', { class: 'small' }, o.last_error_code ?? ''),
+    h('td', {}, h('button', { onclick: () => showOrder(o.external_order_id) }, 'timeline'),
+      ['DELAYED', 'FAILED'].includes(o.status) ? h('button', { onclick: () => act('requeue', () => api('POST', `/orders/${o.external_order_id}/requeue`, {})) }, 'ลองใหม่') : null))));
+
+  $('alerts').replaceChildren(...(s.alerts.length ? s.alerts.map((a) => h('div', { class: 'pkg' },
+    h('div', { class: 'row between' }, h('span', { class: 'pill ' + (a.severity === 'critical' ? 'p-red' : 'p-amber') }, a.kind), h('span', { class: 'muted small' }, fmtTime(a.created_at))),
+    h('div', { class: 'small' }, a.message))) : [h('div', { class: 'muted small' }, 'ไม่มีการแจ้งเตือน')]));
+}
+
+function botCard(b) {
+  const [cls, label] = STATE[b.state];
+  const job = b.last_job;
+  const jobCls = job?.result === 'COMPLETED' ? 'done' : job ? 'failed' : '';
+  const jobText = job ? `${job.external_order_id} → ${job.result}${job.code ? ` (${job.code})` : ''}` : 'ยังไม่มีงาน';
+  const cmd = (c, label) => () => act(`${label} ${b.id}`, () => api('POST', `/bots/${b.id}/commands`, { command: c }, { 'idempotency-key': crypto.randomUUID() }));
+  const latest = snap.packages[0];
+  return h('div', { class: `card bot s-${b.state}` },
+    h('div', { class: 'row between' },
+      h('div', { class: 'row' }, h('div', { class: 'avatar' }, b.name.replace(/[^A-Z0-9]/gi, '').slice(-2) || 'B'),
+        h('div', {}, h('b', {}, b.name), h('div', { class: 'muted small mono' }, b.device_name))),
+      h('div', { style: 'display:grid;gap:4px;justify-items:end' },
+        h('span', { class: 'pill ' + (b.heartbeat_ok ? 'p-green' : 'p-gray') }, b.heartbeat_ok ? 'Online' : 'Offline'),
+        h('span', { class: 'pill ' + cls }, label))),
+    h('div', { class: 'kv' },
+      h('div', {}, h('b', {}, 'Host'), h('span', { class: 'mono', title: b.host ?? '' }, b.host ?? '—')),
+      h('div', {}, h('b', {}, 'Heartbeat'), h('span', { title: fmtTime(b.last_heartbeat) }, ago(b.heartbeat_age_s))),
+      h('div', {}, h('b', {}, 'Bot process'), h('span', {}, b.process_status)),
+      h('div', {}, h('b', {}, 'CPU / RAM'), h('span', {}, `${Number(b.cpu_percent).toFixed(0)}% / ${Number(b.memory_percent).toFixed(0)}%`)),
+      h('div', {}, h('b', {}, 'งานปัจจุบัน'), h('span', { class: 'mono' }, b.current_order ?? '—')),
+      h('div', {}, h('b', {}, 'เวอร์ชันโค้ด'), h('span', { class: 'mono' }, b.code_version ?? '—'))),
+    h('div', { class: 'last ' + jobCls }, h('div', { class: 'muted small' }, 'สถานะล่าสุด'), h('div', { class: 'small' }, jobText)),
+    h('div', { class: 'btns' },
+      h('button', { class: 'green', onclick: cmd('start', 'เปิดบอท'), disabled: b.process_status === 'online' }, 'เปิดบอท'),
+      h('button', { class: 'red', onclick: cmd('stop', 'ปิดบอท'), disabled: b.process_status === 'offline' }, 'ปิดบอท'),
+      h('button', { onclick: cmd('restart', 'restart') }, 'restart'),
+      h('button', { class: 'wide', onclick: () => showBot(b.id) }, 'รายละเอียด (log / metrics)'),
+      h('button', { class: 'wide blue', disabled: !latest, onclick: () => act(`อัปเดตโค้ด ${b.id}`, () => api('POST', `/packages/${latest.id}/deploy`, { bot_ids: [b.id] })) }, 'อัปเดตโค้ด')));
+}
+
+function table(cols, rows) {
+  return h('div', { class: 'table-wrap' }, h('table', {}, h('thead', {}, h('tr', {}, cols.map(([, l]) => h('th', {}, l)))),
+    h('tbody', {}, rows.length ? rows.map((r) => h('tr', {}, cols.map(([k]) => h('td', { class: 'small' }, typeof k === 'function' ? k(r) : (r[k] ?? '—'))))) : h('tr', {}, h('td', { class: 'muted' }, 'ไม่มีข้อมูล')))));
+}
+async function showBot(id) {
+  try {
+    const d = await api('GET', `/bots/${id}`);
+    const b = d.bot;
+    $('detail-body').replaceChildren(
+      h('div', { class: 'row between' }, h('h1', {}, `${b.name} · ${b.id}`), h('button', { onclick: () => $('detail').close() }, 'ปิด')),
+      h('div', { class: 'kv' },
+        h('div', {}, h('b', {}, 'Heartbeat ล่าสุด'), h('span', {}, fmtTime(b.last_heartbeat))),
+        h('div', {}, h('b', {}, 'Uptime (simulator)'), h('span', {}, `${Math.floor(b.uptime_seconds / 60)} นาที`)),
+        h('div', {}, h('b', {}, 'CPU'), h('span', {}, `${b.cpu_percent}%`)), h('div', {}, h('b', {}, 'RAM'), h('span', {}, `${b.memory_percent}%`)),
+        h('div', {}, h('b', {}, 'Agent WebSocket'), h('span', {}, b.agent_connected ? 'เชื่อมต่ออยู่' : 'ไม่ได้เชื่อมต่อ')),
+        h('div', {}, h('b', {}, 'เวอร์ชันโค้ด'), h('span', { class: 'mono' }, b.code_version ?? '—'))),
+      h('h2', {}, 'ประวัติงาน'), table([['external_order_id', 'ออเดอร์'], [(r) => `${r.from} → ${r.to}`, 'สถานะ'], ['reason', 'เหตุผล'], [(r) => fmtTime(r.created_at), 'เวลา']], d.order_history),
+      h('h2', {}, 'คำสั่ง'), table([['id', '#'], ['command', 'คำสั่ง'], ['status', 'สถานะ'], ['attempts', 'ครั้ง'], ['requested_by', 'โดย'], [(r) => fmtTime(r.created_at), 'เวลา']], d.commands),
+      h('h2', {}, 'การอัปเดตโค้ด'), table([['filename', 'ไฟล์'], ['status', 'สถานะ'], ['error', 'error'], [(r) => fmtTime(r.updated_at), 'เวลา']], d.deployments),
+      h('h2', {}, 'Audit log'), table([['actor', 'ผู้ใช้'], ['action', 'การกระทำ'], [(r) => fmtTime(r.created_at), 'เวลา']], d.audit_logs));
+    $('detail').showModal();
+  } catch (e) { toast(e.message, true); }
+}
+async function showOrder(id) {
+  try {
+    const [o, events] = await Promise.all([api('GET', `/orders/${id}`), api('GET', `/orders/${id}/timeline`)]);
+    $('detail-body').replaceChildren(
+      h('div', { class: 'row between' }, h('h1', {}, id), h('button', { onclick: () => $('detail').close() }, 'ปิด')),
+      h('div', { class: 'row' }, h('span', { class: 'pill ' + (ORDER[o.status] ?? 'p-gray') }, o.status), h('span', { class: 'muted' }, `UID ${o.player_uid} · ${o.amount} ${o.currency} · ครั้งที่ ${o.attempts}`)),
+      h('h2', {}, 'Timeline'),
+      table([[(r) => fmtTime(r.created_at), 'เวลา'], ['event_type', 'เหตุการณ์'],
+        [(r) => r.payload?.from ? `${r.payload.from} → ${r.payload.to}` : '', 'สถานะ'],
+        [(r) => [r.payload?.reason, r.payload?.bot_id, r.payload?.code].filter(Boolean).join(' · '), 'รายละเอียด']], events));
+    $('detail').showModal();
+  } catch (e) { toast(e.message, true); }
+}
+
+// ---------- actions ----------
+$('btn-refresh').onclick = () => api('GET', '/dashboard').then(render).catch((e) => toast(e.message, true));
+$('btn-token').onclick = askToken;
+$('btn-kill').onclick = () => confirm('ปิดทั้งระบบ? ทุกเครื่องจะหยุดรับออเดอร์ใหม่ทันที') && act('ปิดทั้งระบบ', () => api('PUT', '/system/kill-switch', { accepting_orders: false }));
+$('btn-resume').onclick = () => act('เปิดทั้งระบบ', () => api('PUT', '/system/kill-switch', { accepting_orders: true }));
+$('btn-upload').onclick = () => {
+  const f = $('pkg-file').files[0];
+  if (!f) return toast('เลือกไฟล์ .zip ก่อน', true);
+  const fd = new FormData(); fd.append('file', f);
+  act('อัปโหลดแพ็กเกจ', () => api('POST', '/packages', fd));
+};
+$('btn-deploy-all').onclick = () => {
+  const p = snap?.packages[0];
+  if (p && confirm(`อัปเดต ${p.filename} ไปทุกเครื่อง?`)) act('สั่งอัปเดตทุกเครื่อง', () => api('POST', `/packages/${p.id}/deploy`, {}));
+};
+$('order-form').onsubmit = (e) => {
+  e.preventDefault();
+  const id = 'DEMO-' + Date.now().toString(36).toUpperCase();
+  act(`สร้าง ${id}`, async () => {
+    await api('POST', '/orders', { external_order_id: id, player_uid: $('o-uid').value, package_code: 'AOEM-99', amount: 146 });
+    await api('POST', `/dev/orders/${id}/pay`, {});
+  });
+};
+
+// ---------- realtime ----------
+let ws, retry;
+function connect() {
+  clearTimeout(retry);
+  ws?.close();
+  const proto = location.protocol === 'https:' ? 'wss' : 'ws';
+  ws = new WebSocket(`${proto}://${location.host}/ws/dashboard?token=${encodeURIComponent(token)}`);
+  ws.onmessage = (e) => {
+    const m = JSON.parse(e.data);
+    if (m.type === 'snapshot') {
+      render(m.data);
+      $('live').className = 'pill p-green';
+      $('live').textContent = 'อัปเดต ' + new Date(m.data.generated_at).toLocaleTimeString('th-TH', { hour12: false });
+    }
+  };
+  ws.onclose = () => {
+    $('live').className = 'pill p-red'; $('live').textContent = 'ขาดการเชื่อมต่อ — กำลังลองใหม่';
+    retry = setTimeout(connect, 3000);
+  };
+}
+connect();
+api('GET', '/dashboard').then(render).catch((e) => toast(e.message, true));
+</script>
+</body>
+</html>

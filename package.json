@@ -1,0 +1,57 @@
+{
+  "dependencies": {
+    "@nestjs/common": "^11.2.7",
+    "@nestjs/core": "^11.2.7",
+    "@nestjs/platform-express": "^11.2.7",
+    "@nestjs/swagger": "^11.4.7",
+    "class-transformer": "^0.5.1",
+    "class-validator": "^0.15.1",
+    "pg": "^8.23.1",
+    "reflect-metadata": "^0.2.2",
+    "rxjs": "^7.8.2",
+    "ws": "^8.22.0"
+  },
+  "devDependencies": {
+    "@nestjs/testing": "^11.2.7",
+    "@types/express": "^5.0.6",
+    "@types/jest": "^29.5.14",
+    "@types/multer": "^2.3.0",
+    "@types/node": "^26.6.5",
+    "@types/pg": "^8.23.1",
+    "@types/supertest": "^7.2.1",
+    "@types/ws": "^8.18.2",
+    "jest": "^29.7.0",
+    "supertest": "^7.3.1",
+    "ts-jest": "^29.4.15",
+    "ts-node": "^10.9.2",
+    "typescript": "^5.9.3"
+  },
+  "name": "oxide-bot-monitor",
+  "version": "1.0.0",
+  "private": true,
+  "description": "Centralized Bot Monitoring & Order Tracking Service",
+  "scripts": {
+    "build": "tsc -p tsconfig.build.json",
+    "start": "node dist/src/main.js",
+    "simulator": "node simulator/server.js",
+    "agents": "node dist/agent/fleet.js",
+    "agent": "node dist/agent/bot-agent.js",
+    "dev": "npm run build && npm start",
+    "test": "jest --runInBand",
+    "test:unit": "jest --runInBand test/unit",
+    "test:integration": "jest --runInBand test/integration"
+  },
+  "jest": {
+    "testEnvironment": "node",
+    "testMatch": [
+      "**/test/**/*.spec.ts"
+    ],
+    "testTimeout": 30000,
+    "transform": {
+      "^.+.ts$": "ts-jest"
+    }
+  },
+  "engines": {
+    "node": ">=20"
+  }
+}
