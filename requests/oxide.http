@@ -1,0 +1,225 @@
+# Oxide Bot Monitor — ทดสอบด้วย VS Code + extension REST Client (กด "Send Request" ทีละอัน จากบนลงล่าง)
+# รันระบบก่อน: docker compose up -d --build   แล้วเปิด dashboard ที่ http://localhost:3000 ดูผลแบบ real-time
+
+@base = http://localhost:3000
+@admin = dev-admin-token
+@agentToken = dev-agent-token
+
+### ภาพรวม dashboard (summary bar + การ์ดทุกเครื่อง + ออเดอร์ล่าสุด + alerts)
+GET {{base}}/dashboard
+X-Admin-Token: {{admin}}
+
+### รายการเครื่อง
+GET {{base}}/bots
+X-Admin-Token: {{admin}}
+
+### รายละเอียดเครื่อง (log / metrics / คำสั่ง / อัปเดตโค้ด / audit)
+GET {{base}}/bots/bot-01
+X-Admin-Token: {{admin}}
+
+
+############################################################
+# 1) Order state machine: PENDING_PAYMENT → QUEUED → IN_PROGRESS → COMPLETED
+############################################################
+
+### สร้างออเดอร์ (external_order_id = idempotency key) → 201
+# @name created
+POST {{base}}/orders
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{ "external_order_id": "HTTP-{{$timestamp}}", "player_uid": "12345678", "package_code": "AOEM-99", "amount": 146 }
+
+### ส่งซ้ำข้อมูลเดิม → 200 ออเดอร์เดิม
+POST {{base}}/orders
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{ "external_order_id": "{{created.response.body.external_order_id}}", "player_uid": "12345678", "package_code": "AOEM-99", "amount": 146 }
+
+### ส่งซ้ำแต่ข้อมูลต่าง → 409 IDEMPOTENCY_MISMATCH
+POST {{base}}/orders
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{ "external_order_id": "{{created.response.body.external_order_id}}", "player_uid": "99999999", "package_code": "AOEM-99", "amount": 146 }
+
+### จำลองธนาคารแจ้งชำระเงิน (dev) → QUEUED แล้วบอทรับไปทำเองภายในไม่กี่วินาที
+POST {{base}}/dev/orders/{{created.response.body.external_order_id}}/pay
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{}
+
+### ดูสถานะ (รอ ~3 วินาที → COMPLETED)
+GET {{base}}/orders/{{created.response.body.external_order_id}}
+X-Admin-Token: {{admin}}
+
+### timeline ทุกการเปลี่ยนสถานะ
+GET {{base}}/orders/{{created.response.body.external_order_id}}/timeline
+X-Admin-Token: {{admin}}
+
+
+############################################################
+# 2) เคสปัญหา — bot จำลองทำตาม player_uid
+#    INVALID001 → FAILED | FLAKY001 → retry แล้ว DELAYED | UNKNOWN001 → DELAYED
+#    HANG001 → bot เงียบ (lease หมด) | TOPUPCRASH001 → ล่มหลังเติม, รอบถัดไปไม่เติมซ้ำ
+############################################################
+
+### สร้าง + จ่าย: UID ผิด (permanent → FAILED)
+# @name invalid
+POST {{base}}/orders
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{ "external_order_id": "HTTP-INVALID-{{$timestamp}}", "player_uid": "INVALID001", "package_code": "AOEM-99", "amount": 146 }
+
+###
+POST {{base}}/dev/orders/{{invalid.response.body.external_order_id}}/pay
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{}
+
+### สร้าง + จ่าย: ล่มหลังเติม (ดู timeline: provider_duplicate_topup_prevented)
+# @name crash
+POST {{base}}/orders
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{ "external_order_id": "HTTP-CRASH-{{$timestamp}}", "player_uid": "TOPUPCRASH001", "package_code": "AOEM-99", "amount": 146 }
+
+###
+POST {{base}}/dev/orders/{{crash.response.body.external_order_id}}/pay
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{}
+
+### (รอ ~40 วินาที) timeline ของออเดอร์ที่ล่มหลังเติม
+GET {{base}}/orders/{{crash.response.body.external_order_id}}/timeline
+X-Admin-Token: {{admin}}
+
+### จ่ายหลังหมดเวลา → EXPIRED + alert ให้คืนเงิน
+# @name late
+POST {{base}}/orders
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{ "external_order_id": "HTTP-LATE-{{$timestamp}}", "player_uid": "12345678", "package_code": "AOEM-99", "amount": 146 }
+
+###
+POST {{base}}/dev/orders/{{late.response.body.external_order_id}}/pay
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{ "late": true }
+
+### webhook ที่ signature ผิด → 401
+POST {{base}}/webhooks/payment
+Content-Type: application/json
+X-Signature: sha256=0000
+
+{ "event_id": "evt-x", "external_order_id": "x", "transaction_id": "t", "amount": 1, "paid_at": "2026-10-15T00:00:00Z" }
+
+### alerts (DELAYED, จ่ายหลังหมดเวลา, เครื่องหลุด, ...)
+GET {{base}}/alerts
+X-Admin-Token: {{admin}}
+
+### แอดมินเอาออเดอร์ DELAYED / FAILED กลับเข้าคิว (เปลี่ยน id เป็นออเดอร์ที่ DELAYED)
+POST {{base}}/orders/{{invalid.response.body.external_order_id}}/requeue
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{ "note": "แก้ UID แล้ว" }
+
+
+############################################################
+# 3) Kill-switch ทั้งระบบ
+############################################################
+
+### ปิดทั้งระบบ → ทุกเครื่องปฏิเสธงานใหม่ (dashboard: active = 0)
+PUT {{base}}/system/kill-switch
+X-Admin-Token: {{admin}}
+X-Actor: tester
+Content-Type: application/json
+
+{ "accepting_orders": false }
+
+### bot ขอรับงานตอนปิดระบบ → 409 SYSTEM_PAUSED
+POST {{base}}/agent/claim
+X-Agent-Token: {{agentToken}}
+X-Bot-Id: bot-01
+
+### เปิดทั้งระบบ
+PUT {{base}}/system/kill-switch
+X-Admin-Token: {{admin}}
+X-Actor: tester
+Content-Type: application/json
+
+{ "accepting_orders": true }
+
+
+############################################################
+# 4) สั่งเปิด/ปิดบอทรายเครื่อง (ผ่าน Bot Simulator)
+############################################################
+
+### เปิดบอท bot-03 → 202 (คิวไว้ executor ส่งต่อให้ simulator)
+# @name cmd
+POST {{base}}/bots/bot-03/commands
+X-Admin-Token: {{admin}}
+Idempotency-Key: start-bot-03-{{$timestamp}}
+Content-Type: application/json
+
+{ "command": "start" }
+
+### ผลคำสั่ง (queued → running → success)
+GET {{base}}/commands/{{cmd.response.body.id}}
+X-Admin-Token: {{admin}}
+
+### ปิดบอท bot-03
+POST {{base}}/bots/bot-03/commands
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{ "command": "stop" }
+
+
+############################################################
+# 5) อัปเดตโค้ด (zip) ทุกเครื่องหรือเลือกเครื่อง
+############################################################
+
+### อัปโหลดแพ็กเกจ (ไฟล์ตัวอย่าง requests/sample-package.zip)
+# @name pkg
+POST {{base}}/packages
+X-Admin-Token: {{admin}}
+Content-Type: multipart/form-data; boundary=----oxide
+
+------oxide
+Content-Disposition: form-data; name="file"; filename="sample-package.zip"
+Content-Type: application/zip
+
+< ./sample-package.zip
+------oxide--
+
+### อัปเดตทุกเครื่อง
+POST {{base}}/packages/{{pkg.response.body.id}}/deploy
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{}
+
+### อัปเดตเฉพาะ bot-02
+POST {{base}}/packages/{{pkg.response.body.id}}/deploy
+X-Admin-Token: {{admin}}
+Content-Type: application/json
+
+{ "bot_ids": ["bot-02"] }
+
+### สถานะการอัปเดต
+GET {{base}}/deployments
+X-Admin-Token: {{admin}}
+
+### audit log ทุกการสั่งงาน
+GET {{base}}/audit-logs
+X-Admin-Token: {{admin}}
