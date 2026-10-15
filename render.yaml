@@ -1,0 +1,27 @@
+# Render Blueprint: New → Blueprint → เลือก repo นี้
+# web service ฟรี 1 container (simulator + API + บอท 3 เครื่อง) + PostgreSQL ฟรี
+services:
+  - type: web
+    name: oxide-bot-monitor
+    runtime: docker
+    plan: free
+    dockerCommand: node dist/agent/demo.js
+    healthCheckPath: /docs
+    envVars:
+      - key: DATABASE_URL
+        fromDatabase:
+          name: oxide-db
+          property: connectionString
+      # สุ่มใหม่บน Render — ดูค่าได้ที่แท็บ Environment (ไม่ใช้ค่า dev ใน repo)
+      - key: ADMIN_TOKEN
+        generateValue: true
+      - key: AGENT_TOKEN
+        generateValue: true
+      - key: WEBHOOK_SECRET
+        generateValue: true
+
+databases:
+  - name: oxide-db
+    plan: free
+    databaseName: oxide_monitor
+    user: oxide

@@ -39,7 +39,8 @@
     "dev": "npm run build && npm start",
     "test": "jest --runInBand",
     "test:unit": "jest --runInBand test/unit",
-    "test:integration": "jest --runInBand test/integration"
+    "test:integration": "jest --runInBand test/integration",
+    "start:demo": "node dist/agent/demo.js"
   },
   "jest": {
     "testEnvironment": "node",

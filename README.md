@@ -26,6 +26,14 @@ Compose รัน 4 service: `postgres` (จาก pack), `simulator` (จาก
 
 ปิดระบบ: `docker compose down` (ล้างข้อมูลด้วย `docker compose down -v`)
 
+### Live demo
+
+_(ลิงก์จะใส่หลัง deploy บน Render)_
+
+- `render.yaml` สร้าง web service ฟรี 1 ตัว + PostgreSQL ฟรี: container เดียวรัน simulator + API + บอท 3 เครื่อง (`node dist/agent/demo.js`) เพราะแผนฟรีมี container เดียว ส่วน Docker Compose แยก service ตามโครงสร้างจริง
+- `ADMIN_TOKEN` / `AGENT_TOKEN` / `WEBHOOK_SECRET` ถูกสุ่มบน Render ไม่ใช่ค่า `dev-...` ใน repo — เปิด dashboard แล้วกดปุ่ม 🔑 ใส่ admin token
+- แผนฟรีหยุดเมื่อไม่มีคนใช้สักพัก request แรกอาจใช้เวลาประมาณ 1 นาที
+
 ### รันแบบไม่ใช้ Docker (ยกเว้น Postgres)
 
 ```bash
