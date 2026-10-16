@@ -265,16 +265,6 @@ Schema เดิมมีสถานะ `pending/processing/completed/failed/ca
 
 Candidate pack ระบุว่าไม่ต้องเพิ่ม migration แต่ schema เดิมรองรับ state machine ใน PDF ไม่ได้ จึงเลือกเพิ่ม migration แบบไม่แก้ไฟล์เดิม ประเด็นนี้ควรยืนยันกับผู้ให้โจทย์
 
-## การใช้ AI
-
-ใช้ AI ช่วยพัฒนาและทบทวนโค้ด โดยตรวจผลด้วย unit tests, integration tests บน PostgreSQL จริง และการทดลองผ่าน Docker Compose
-
-ระหว่าง review พบกรณีบอทเดียวรับหลายงานพร้อมกัน และ deployment ถูกเขียนสถานะย้อน จึงเพิ่มเทสต์จำลองกรณีเหล่านี้แล้วแก้โค้ด การอัปเดตแพ็กเกจมีเทสต์ทั้งไฟล์เสีย path traversal และการโหลดโค้ดมารัน
-
-## Live demo
-
-ยังไม่ได้ deploy จึงยังไม่มีลิงก์ `render.yaml` เตรียมไว้สำหรับรัน API, simulator และ agent 3 ตัวผ่าน `node dist/agent/demo.js` พร้อม PostgreSQL
-
 ## ข้อจำกัด
 
 - Agent และ provider เป็นของจำลอง ไม่เชื่อมต่อระบบเติมเกมหรือธนาคารจริง
