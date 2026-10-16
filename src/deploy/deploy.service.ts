@@ -124,7 +124,15 @@ export class DeployService {
       [onlyBot ?? null, ACK_TIMEOUT_S],
     );
     for (const d of due) {
-      // agent ออฟไลน์ → คงสถานะ queued ไว้ ส่งใหม่ตอนต่อกลับมา
+      // เขียน sent "ก่อน" ส่ง: agent อาจ ack applied กลับมาเร็วมาก ถ้าเขียน sent ทีหลังจะทับ applied
+      // เงื่อนไขใน WHERE ทำให้ dispatch ที่รันซ้อนกันส่งได้ครั้งเดียว
+      const claimed = await this.db.one(
+        `UPDATE bot_deployments SET status = 'sent', attempts = attempts + 1, updated_at = now()
+         WHERE id = $1 AND (status = 'queued' OR (status = 'sent' AND updated_at < now() - make_interval(secs => $2)))
+         RETURNING id`,
+        [d.id, ACK_TIMEOUT_S],
+      );
+      if (!claimed) continue;
       const delivered = this.events.toAgent(d.bot_id, {
         type: 'deploy',
         deploymentId: String(d.id),
@@ -132,9 +140,11 @@ export class DeployService {
         sha256: d.sha256,
         filename: d.filename,
       });
-      if (delivered) {
+      if (!delivered) {
+        // agent ออฟไลน์ → กลับเป็น queued ส่งใหม่ตอนต่อกลับมา (เฉพาะถ้ายังเป็น sent — ไม่ทับผลที่ agent ตอบแล้ว)
         await this.db.query(
-          `UPDATE bot_deployments SET status = 'sent', attempts = attempts + 1, updated_at = now() WHERE id = $1`,
+          `UPDATE bot_deployments SET status = 'queued', attempts = attempts - 1, updated_at = now()
+           WHERE id = $1 AND status = 'sent'`,
           [d.id],
         );
       }

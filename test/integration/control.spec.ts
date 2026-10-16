@@ -5,6 +5,7 @@ import { createServer, Server } from 'node:http';
 import { AddressInfo } from 'node:net';
 import { CommandsService } from '../../src/bots/commands.service';
 import { DeployService } from '../../src/deploy/deploy.service';
+import { EventsService } from '../../src/realtime/events.service';
 import { ADMIN, agent, orderRow, paidOrder, reset, startApp, TestCtx } from '../helpers';
 
 /** simulator ปลอม: ตอบเหมือน simulator/server.js และนับ request / ทำให้ล่มได้ */
@@ -194,6 +195,39 @@ describe('code deployment', () => {
     expect(third.body.results.map((r: any) => r.result)).toEqual(['already_current', 'already_current', 'already_current']);
     const versions = await ctx.db.query('SELECT DISTINCT code_version FROM oxide_bot_agents');
     expect(versions).toEqual([{ code_version: pkg.sha256.slice(0, 12) }]);
+  });
+
+  it('keeps applied when the agent acknowledges before the server records sent', async () => {
+    const pkg = (await upload().expect(201)).body;
+    const deploy = ctx.app.get(DeployService);
+    const events = ctx.app.get(EventsService);
+    let ack: Promise<void> | undefined;
+    // agent ตอบทันทีที่ได้รับคำสั่ง (เช่น มีเวอร์ชันนี้อยู่แล้ว)
+    events.setAgentSender((botId, msg) => {
+      if (msg.type === 'deploy') ack = deploy.ack(botId, msg.deploymentId, true);
+      return true;
+    });
+    // ทำให้ ack เสร็จก่อนคำสั่ง UPDATE ... 'sent' ของ server (จังหวะที่ทำให้เกิดบั๊ก)
+    const query = ctx.db.query.bind(ctx.db);
+    const spy = jest.spyOn(ctx.db, 'query').mockImplementation(async (sql: string, params?: unknown[]) => {
+      if (/SET status = 'sent'/.test(sql) && ack) await ack;
+      return query(sql, params);
+    });
+    try {
+      await ctx.http().post(`/packages/${pkg.id}/deploy`).set(ADMIN).send({ bot_ids: ['bot-01'] }).expect(202);
+      await ack;
+    } finally {
+      spy.mockRestore();
+      events.setAgentSender(() => false);
+    }
+    expect((await ctx.db.one(`SELECT status FROM bot_deployments WHERE bot_id = 'bot-01'`)).status).toBe('applied');
+  });
+
+  it('puts a deployment back to queued when the agent is offline', async () => {
+    const pkg = (await upload().expect(201)).body;
+    ctx.app.get(EventsService).setAgentSender(() => false);
+    await ctx.http().post(`/packages/${pkg.id}/deploy`).set(ADMIN).send({ bot_ids: ['bot-02'] }).expect(202);
+    expect(await ctx.db.one(`SELECT status, attempts FROM bot_deployments WHERE bot_id = 'bot-02'`)).toEqual({ status: 'queued', attempts: 0 });
   });
 
   it('can target selected bots and records a failed update', async () => {

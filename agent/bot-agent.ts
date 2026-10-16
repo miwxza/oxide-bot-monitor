@@ -15,10 +15,10 @@
  *   อื่น ๆ          → สำเร็จ
  */
 import { createHash } from 'node:crypto';
-import { mkdirSync, writeFileSync } from 'node:fs';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import WebSocket from 'ws';
+import { installPackage, readCurrent } from './installer';
 
 const botId = process.argv[2] ?? process.env.BOT_ID;
 if (!botId) {
@@ -36,7 +36,9 @@ const HOST = process.env.AGENT_HOST ?? `${hostname()}-${botId}`;
 let ws: WebSocket | undefined;
 let accepting = true;
 let busy = false;
-let codeVersion: string | undefined;
+// จำเวอร์ชันที่ติดตั้งไว้ข้ามการ restart ของ agent
+let codeVersion: string | undefined = readCurrent(DATA_DIR)?.version;
+let installing = false;
 let heartbeatTimer: NodeJS.Timeout | undefined;
 
 const log = (msg: string, extra: object = {}) =>
@@ -95,6 +97,8 @@ async function applyDeploy(msg: { deploymentId: string; packageId: string; sha25
     ws?.send(JSON.stringify({ type: 'deploy_ack', deploymentId: msg.deploymentId, ok, error }));
   const version = msg.sha256.slice(0, 12);
   if (codeVersion === version) return ack(true); // ส่งซ้ำ → ตอบผลเดิม
+  if (installing) return; // กำลังติดตั้งอยู่ — server จะส่งซ้ำถ้าไม่ได้ ack
+  installing = true; // หยุดรับงานใหม่ระหว่างติดตั้ง
   try {
     const res = await fetch(`${SERVER}/agent/packages/${msg.packageId}`, {
       headers: { 'x-agent-token': TOKEN, 'x-bot-id': botId! },
@@ -103,22 +107,24 @@ async function applyDeploy(msg: { deploymentId: string; packageId: string; sha25
     const buf = Buffer.from(await res.arrayBuffer());
     const actual = createHash('sha256').update(buf).digest('hex');
     if (actual !== msg.sha256) throw new Error('sha256 mismatch — package corrupted');
-    // "ติดตั้ง": เก็บไฟล์ไว้ในโฟลเดอร์ของเครื่อง (bot จริงจะแตก zip แล้ว restart process)
-    mkdirSync(DATA_DIR, { recursive: true });
-    writeFileSync(join(DATA_DIR, `${version}-${msg.filename}`), buf);
+    // ไม่สลับโค้ดระหว่างทำออเดอร์: รอให้งานที่ถืออยู่จบก่อน
+    while (busy) await sleep(200);
+    installPackage(DATA_DIR, version, msg.filename, buf);
     codeVersion = version;
-    log('deploy applied', { version, filename: msg.filename });
+    log('deploy applied', { version, filename: msg.filename, dir: join(DATA_DIR, 'releases', version) });
     ack(true);
     sendHeartbeat();
   } catch (err) {
     log('deploy failed', { err: (err as Error).message });
     ack(false, (err as Error).message);
+  } finally {
+    installing = false;
   }
 }
 
 // ---------------- Work ----------------
 async function workLoopOnce(): Promise<void> {
-  if (busy || !accepting || ws?.readyState !== WebSocket.OPEN) return;
+  if (busy || installing || !accepting || ws?.readyState !== WebSocket.OPEN) return;
   busy = true;
   try {
     const { status, data } = await api('POST', '/agent/claim');

@@ -38,65 +38,73 @@ export class WorkService {
    * bot ของาน 1 ชิ้น
    * - kill-switch อ่านด้วย FOR SHARE ใน transaction เดียวกัน
    * - เครื่องต้องมี heartbeat สด และ process (จาก simulator) เป็น online
-   * - เครื่องหนึ่งทำได้ทีละออเดอร์
+   * - เครื่องหนึ่งทำได้ทีละออเดอร์: ล็อกแถวบอทด้วย FOR UPDATE ให้ claim ของเครื่องเดียวกันเข้าคิวกัน
+   *   (FOR SHARE ถือพร้อมกันได้ → claim ที่ยิงพร้อมกันผ่านเช็ก BOT_BUSY ทั้งหมด) + unique index เป็นด่านสุดท้าย
    * - เลือกออเดอร์ด้วย FOR UPDATE SKIP LOCKED: bot หลายตัวขอพร้อมกันได้คนละออเดอร์ ไม่มีใครได้ซ้ำ
    */
   async claim(botId: string): Promise<ClaimedJob | null> {
-    const job = await this.db.tx(async (db) => {
-      if (!(await SystemService.isAcceptingForUpdate(db))) {
-        throw new AppError(HttpStatus.CONFLICT, 'SYSTEM_PAUSED', 'Kill-switch is on: not accepting new orders');
+    const job = await this.db.tx(async (db) => this.claimIn(db, botId)).catch((err) => {
+      if (err?.code === '23505' && err?.constraint === 'uq_orders_one_in_progress_per_bot') {
+        throw new AppError(HttpStatus.CONFLICT, 'BOT_BUSY', 'Bot already has an order in progress');
       }
-      const bot = (
-        await db.query(
-          `SELECT id, status, last_heartbeat > now() - make_interval(secs => $2) AS heartbeat_ok
-           FROM oxide_bot_agents WHERE id = $1 FOR SHARE`,
-          [botId, this.cfg.botHeartbeatTimeoutS],
-        )
-      ).rows[0];
-      if (!bot) throw notFound('Bot');
-      if (!bot.heartbeat_ok || bot.status !== 'online') {
-        throw new AppError(HttpStatus.CONFLICT, 'BOT_NOT_READY', `Bot is not ready (status=${bot.status}, heartbeat_ok=${bot.heartbeat_ok})`);
-      }
-      const busy = await db.query(`SELECT 1 FROM orders WHERE assigned_bot_id = $1 AND status = 'IN_PROGRESS'`, [botId]);
-      if (busy.rowCount) throw new AppError(HttpStatus.CONFLICT, 'BOT_BUSY', 'Bot already has an order in progress');
-
-      const pick = (
-        await db.query(
-          `SELECT id, attempts FROM orders
-           WHERE status = 'QUEUED' AND (next_attempt_at IS NULL OR next_attempt_at <= now())
-           ORDER BY next_attempt_at NULLS FIRST, id
-           FOR UPDATE SKIP LOCKED LIMIT 1`,
-        )
-      ).rows[0];
-      if (!pick) return null;
-
-      const o = await transition(db, pick.id, 'QUEUED', 'IN_PROGRESS', {
-        reason: 'claimed',
-        actor: botId,
-        data: { bot_id: botId },
-        set: {
-          assigned_bot_id: botId,
-          lease_token: randomUUID(),
-          lease_expires_at: new Date(Date.now() + this.cfg.orderLeaseS * 1000),
-          attempts: pick.attempts + 1,
-        },
-      });
-      return {
-        external_order_id: o.external_order_id,
-        player_uid: o.player_uid,
-        package_code: o.package_code,
-        amount: o.amount,
-        lease_token: o.lease_token,
-        lease_expires_at: o.lease_expires_at,
-        attempt: o.attempts,
-        topup_key: topupKey(o.id),
-      } satisfies ClaimedJob;
+      throw err;
     });
     if (job) {
       this.log.log({ bot: botId, order: job.external_order_id, attempt: job.attempt, msg: 'claimed' });
       this.events.changed('order.claimed');
     }
     return job;
+  }
+
+  private async claimIn(db: PoolClient, botId: string): Promise<ClaimedJob | null> {
+    if (!(await SystemService.isAcceptingForUpdate(db))) {
+      throw new AppError(HttpStatus.CONFLICT, 'SYSTEM_PAUSED', 'Kill-switch is on: not accepting new orders');
+    }
+    const bot = (
+      await db.query(
+        `SELECT id, status, last_heartbeat > now() - make_interval(secs => $2) AS heartbeat_ok
+         FROM oxide_bot_agents WHERE id = $1 FOR UPDATE`,
+        [botId, this.cfg.botHeartbeatTimeoutS],
+      )
+    ).rows[0];
+    if (!bot) throw notFound('Bot');
+    if (!bot.heartbeat_ok || bot.status !== 'online') {
+      throw new AppError(HttpStatus.CONFLICT, 'BOT_NOT_READY', `Bot is not ready (status=${bot.status}, heartbeat_ok=${bot.heartbeat_ok})`);
+    }
+    const busy = await db.query(`SELECT 1 FROM orders WHERE assigned_bot_id = $1 AND status = 'IN_PROGRESS'`, [botId]);
+    if (busy.rowCount) throw new AppError(HttpStatus.CONFLICT, 'BOT_BUSY', 'Bot already has an order in progress');
+
+    const pick = (
+      await db.query(
+        `SELECT id, attempts FROM orders
+         WHERE status = 'QUEUED' AND (next_attempt_at IS NULL OR next_attempt_at <= now())
+         ORDER BY next_attempt_at NULLS FIRST, id
+         FOR UPDATE SKIP LOCKED LIMIT 1`,
+      )
+    ).rows[0];
+    if (!pick) return null;
+
+    const o = await transition(db, pick.id, 'QUEUED', 'IN_PROGRESS', {
+      reason: 'claimed',
+      actor: botId,
+      data: { bot_id: botId },
+      set: {
+        assigned_bot_id: botId,
+        lease_token: randomUUID(),
+        lease_expires_at: new Date(Date.now() + this.cfg.orderLeaseS * 1000),
+        attempts: pick.attempts + 1,
+      },
+    });
+    return {
+      external_order_id: o.external_order_id,
+      player_uid: o.player_uid,
+      package_code: o.package_code,
+      amount: o.amount,
+      lease_token: o.lease_token,
+      lease_expires_at: o.lease_expires_at,
+      attempt: o.attempts,
+      topup_key: topupKey(o.id),
+    } satisfies ClaimedJob;
   }
 
   /** ต่ออายุ lease ระหว่างทำงาน — lease หาย (ถูกคืนเข้าคิวแล้ว) → 409 ให้ bot หยุดทันที */

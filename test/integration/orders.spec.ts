@@ -120,6 +120,15 @@ describe('bots claiming orders (concurrency)', () => {
     expect(taken.sort()).toEqual(ids.sort());
   });
 
+  it('gives a bot only one order even when it claims 5 times at once', async () => {
+    await Promise.all(Array.from({ length: 5 }, () => paidOrder(ctx)));
+    const res = await Promise.all(Array.from({ length: 5 }, () => ctx.http().post('/agent/claim').set(agent('bot-01'))));
+    expect(res.filter((r) => r.status === 200)).toHaveLength(1);
+    expect(res.filter((r) => r.status === 409).every((r) => r.body.code === 'BOT_BUSY')).toBe(true);
+    const held = await ctx.db.query(`SELECT 1 FROM orders WHERE assigned_bot_id = 'bot-01' AND status = 'IN_PROGRESS'`);
+    expect(held).toHaveLength(1);
+  });
+
   it('lets a bot hold only one order at a time', async () => {
     await paidOrder(ctx);
     await paidOrder(ctx);
