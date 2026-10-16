@@ -7,6 +7,7 @@ COPY tsconfig.json tsconfig.build.json ./
 COPY src ./src
 COPY agent ./agent
 COPY test ./test
+COPY requests ./requests
 COPY db ./db
 COPY public ./public
 COPY simulator ./simulator
