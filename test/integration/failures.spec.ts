@@ -104,6 +104,23 @@ describe('top-up after a crash is not charged twice', () => {
   });
 });
 
+describe('which bot code finished the order', () => {
+  it('records bot_version from the package in the timeline', async () => {
+    const id = await paidOrder(ctx);
+    const job = await claim('bot-01');
+    await ctx.http().post('/agent/provider/topup').set(agent('bot-01')).send({ topup_key: job.topup_key, external_order_id: id }).expect(200);
+    await ctx.http().post(`/agent/orders/${id}/complete`).set(agent('bot-01')).send({ lease_token: job.lease_token, bot_version: 'oxide-bot@2.0.0' }).expect(200);
+    const timeline = (await ctx.http().get(`/orders/${id}/timeline`).set(ADMIN).expect(200)).body;
+    expect(timeline.at(-1).payload).toMatchObject({ to: 'COMPLETED', bot_id: 'bot-01', bot_version: 'oxide-bot@2.0.0' });
+  });
+
+  it('retries when the bot code itself throws', async () => {
+    const id = await paidOrder(ctx);
+    const job = await claim('bot-01');
+    expect((await fail('bot-01', id, job.lease_token, 'BOT_CODE_ERROR').expect(200)).body.status).toBe('QUEUED');
+  });
+});
+
 describe('errors reported by bots (retry policy on the server)', () => {
   it('fails a permanent error immediately', async () => {
     const id = await paidOrder(ctx, 'INVALID001');

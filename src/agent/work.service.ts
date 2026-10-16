@@ -123,7 +123,7 @@ export class WorkService {
    * จบงาน: ต้องถือ lease และต้องมีหลักฐานการเติมที่ provider (provider_topups)
    * เรียกซ้ำด้วย token เดิมหลังสำเร็จแล้ว → ตอบผลเดิม (idempotent)
    */
-  async complete(botId: string, externalId: string, token: string): Promise<any> {
+  async complete(botId: string, externalId: string, token: string, botVersion?: string): Promise<any> {
     const result = await this.db.tx(async (db) => {
       const o = await this.lockOwned(db, externalId);
       if (o.status === 'COMPLETED' && o.lease_token === token && o.assigned_bot_id === botId) {
@@ -138,7 +138,7 @@ export class WorkService {
       await transition(db, o.id, 'IN_PROGRESS', 'COMPLETED', {
         reason: 'topup_succeeded',
         actor: botId,
-        data: { bot_id: botId, attempt: o.attempts },
+        data: { bot_id: botId, attempt: o.attempts, ...(botVersion ? { bot_version: botVersion } : {}) },
         set: { completed_at: new Date(), lease_expires_at: null },
       });
       return { external_order_id: o.external_order_id, status: 'COMPLETED', duplicate: false };

@@ -47,6 +47,9 @@ services:
     environment:
       SERVER_URL: http://api:3000
       AGENT_TOKEN: dev-agent-token
+    volumes:
+      # แพ็กเกจที่ติดตั้งแล้วอยู่บน "ดิสก์ของเครื่อง" — ไม่หายตอน rebuild/recreate container
+      - agent_data:/app/.agent-data
     depends_on:
       - api
 
@@ -65,3 +68,4 @@ services:
 
 volumes:
   oxide_candidate_pg:
+  agent_data:

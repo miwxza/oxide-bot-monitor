@@ -11,6 +11,7 @@ const TRANSIENT = new Set([
   'BOT_COOKIE_EXPIRED',
   'BOT_HEARTBEAT_TIMEOUT', // เครื่องหลุด (job ตรวจ heartbeat)
   'LEASE_EXPIRED', // bot ไม่ต่อ lease
+  'BOT_CODE_ERROR', // โค้ดบอทจากแพ็กเกจโยน error — ลองใหม่ (อาจได้เครื่อง/เวอร์ชันอื่น) จำกัดครั้ง
 ]);
 
 export function classifyError(code: string): ErrorClass {

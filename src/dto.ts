@@ -115,6 +115,14 @@ export class LeaseDto {
   lease_token: string;
 }
 
+export class CompleteDto extends LeaseDto {
+  @ApiPropertyOptional({ example: 'oxide-bot@2.0.0', description: 'โค้ดบอท (จากแพ็กเกจ) ที่ทำงานนี้ — บันทึกใน timeline' })
+  @IsOptional()
+  @IsString()
+  @MaxLength(100)
+  bot_version?: string;
+}
+
 export class FailDto extends LeaseDto {
   @ApiProperty({ example: 'PROVIDER_TIMEOUT' })
   @IsString()

@@ -1,23 +1,19 @@
 /**
- * Bot agent จำลอง — 1 process = 1 เครื่อง (Node/Notebook)
+ * Bot agent (supervisor) — 1 process = 1 เครื่อง (Node/Notebook)
  *
  *   node dist/agent/bot-agent.js bot-01
  *
  * - WebSocket /ws/agent : heartbeat ทุก HEARTBEAT_MS, รับ system / wake / deploy
  * - REST /agent/*        : claim งาน, ต่อ lease, เติมเกมที่ provider, complete / fail
- *
- * พฤติกรรมตาม player_uid (สำหรับ demo เคสปัญหา):
- *   INVALID001     → INVALID_UID (permanent → FAILED)
- *   FLAKY001       → PROVIDER_TIMEOUT ทุกครั้ง (retry → DELAYED)
- *   UNKNOWN001     → TOPUP_STATUS_UNKNOWN (DELAYED ทันที)
- *   HANG001        → รับงานแล้วเงียบ (lease หมด → คืนคิว → เครื่องอื่นรับต่อ)
- *   TOPUPCRASH001  → เติมที่ provider แล้ว "ล่ม" ก่อน complete → เครื่องถัดไปเติมซ้ำด้วย topup_key เดิม = ไม่เติมซ้ำ
- *   อื่น ๆ          → สำเร็จ
+ * - โค้ดที่ทำงานเติมเกมโหลดจากแพ็กเกจที่ติดตั้งไว้ (releases/<version>/, ดู bot-module.ts)
+ *   ถ้ายังไม่มีแพ็กเกจ ใช้โค้ดในตัว (builtin-bot.ts)
  */
 import { createHash } from 'node:crypto';
 import { hostname } from 'node:os';
 import { join } from 'node:path';
 import WebSocket from 'ws';
+import { BotContext, BotModule, Job, loadBot } from './bot-module';
+import { builtinBot } from './builtin-bot';
 import { installPackage, readCurrent } from './installer';
 
 const botId = process.argv[2] ?? process.env.BOT_ID;
@@ -36,14 +32,28 @@ const HOST = process.env.AGENT_HOST ?? `${hostname()}-${botId}`;
 let ws: WebSocket | undefined;
 let accepting = true;
 let busy = false;
-// จำเวอร์ชันที่ติดตั้งไว้ข้ามการ restart ของ agent
-let codeVersion: string | undefined = readCurrent(DATA_DIR)?.version;
+let codeVersion: string | undefined;
+let bot: BotModule = builtinBot;
 let installing = false;
 let heartbeatTimer: NodeJS.Timeout | undefined;
 
 const log = (msg: string, extra: object = {}) =>
   console.log(JSON.stringify({ t: new Date().toISOString(), bot: botId, msg, ...extra }));
-const sleep = (ms: number) => new Promise((r) => setTimeout(r, ms));
+const sleep = (ms: number) => new Promise<void>((r) => setTimeout(r, ms));
+const releaseDir = (version: string) => join(DATA_DIR, 'releases', version);
+
+/** ตอนเริ่ม agent: โหลดโค้ดบอทจากแพ็กเกจที่ติดตั้งไว้ล่าสุด (จำข้ามการ restart) */
+function loadInstalledBot(): void {
+  const current = readCurrent(DATA_DIR);
+  if (!current) return log('no package installed — using builtin bot code');
+  try {
+    bot = loadBot(releaseDir(current.version));
+    codeVersion = current.version;
+    log('bot code loaded', { bot_code: `${bot.name}@${bot.version}`, version: codeVersion });
+  } catch (err) {
+    log('installed package cannot be loaded — using builtin bot code', { version: current.version, err: (err as Error).message });
+  }
+}
 
 async function api(method: string, path: string, body?: unknown): Promise<{ status: number; data: any }> {
   const res = await fetch(SERVER + path, {
@@ -76,7 +86,8 @@ function connect(): void {
 
 function sendHeartbeat(): void {
   if (ws?.readyState === WebSocket.OPEN) {
-    ws.send(JSON.stringify({ type: 'heartbeat', host: HOST, code_version: codeVersion }));
+    // ส่งเวอร์ชันจริงเสมอ (รวมถึง builtin) ให้ server รู้ทันทีถ้าเครื่องเสียไฟล์ที่ติดตั้งไว้
+    ws.send(JSON.stringify({ type: 'heartbeat', host: HOST, code_version: codeVersion ?? 'builtin' }));
   }
 }
 
@@ -109,9 +120,11 @@ async function applyDeploy(msg: { deploymentId: string; packageId: string; sha25
     if (actual !== msg.sha256) throw new Error('sha256 mismatch — package corrupted');
     // ไม่สลับโค้ดระหว่างทำออเดอร์: รอให้งานที่ถืออยู่จบก่อน
     while (busy) await sleep(200);
-    installPackage(DATA_DIR, version, msg.filename, buf);
+    // verify: ต้องโหลดโค้ดบอทจากแพ็กเกจได้ก่อนสลับ ไม่งั้นปฏิเสธ (เวอร์ชันเดิมทำงานต่อ)
+    installPackage(DATA_DIR, version, msg.filename, buf, (dir) => void loadBot(dir));
+    bot = loadBot(releaseDir(version)); // งานถัดไปใช้โค้ดใหม่
     codeVersion = version;
-    log('deploy applied', { version, filename: msg.filename, dir: join(DATA_DIR, 'releases', version) });
+    log('deploy applied — bot code reloaded', { version, bot_code: `${bot.name}@${bot.version}`, filename: msg.filename });
     ack(true);
     sendHeartbeat();
   } catch (err) {
@@ -141,45 +154,42 @@ async function workLoopOnce(): Promise<void> {
   }
 }
 
-async function process_(job: any): Promise<void> {
+async function process_(job: Job & { lease_token: string }): Promise<void> {
   const id = job.external_order_id;
   const token = job.lease_token;
-  log('claimed', { order: id, uid: job.player_uid, attempt: job.attempt });
-  const fail = (code: string, message: string) => api('POST', `/agent/orders/${id}/fail`, { lease_token: token, code, message });
+  const running = bot; // ใช้โค้ดชุดเดียวตลอดออเดอร์นี้
+  const botVersion = `${running.name}@${running.version}`;
+  log('claimed', { order: id, uid: job.player_uid, attempt: job.attempt, bot_code: botVersion });
 
-  switch (job.player_uid) {
-    case 'INVALID001':
-      await sleep(500);
-      return void (await fail('INVALID_UID', 'Player UID not found at provider'));
-    case 'FLAKY001':
-      await sleep(500);
-      return void (await fail('PROVIDER_TIMEOUT', 'Provider did not respond in 30s'));
-    case 'UNKNOWN001':
-      await sleep(500);
-      return void (await fail('TOPUP_STATUS_UNKNOWN', 'Provider returned 500 after charging'));
-    case 'HANG001':
-      log('simulating hang (no lease renewal)', { order: id });
-      return;
+  const ctx: BotContext = {
+    job,
+    workMs: WORK_MS,
+    sleep,
+    log: (msg, extra = {}) => log(msg, { order: id, ...extra }),
+    extendLease: async () => (await api('POST', `/agent/orders/${id}/lease`, { lease_token: token })).status === 200,
+    topup: async () => {
+      const r = await api('POST', '/agent/provider/topup', { topup_key: job.topup_key, external_order_id: id });
+      return r.status === 200 ? { ok: true, duplicate: r.data.duplicate } : { ok: false, error: JSON.stringify(r.data) };
+    },
+    complete: async () => {
+      const r = await api('POST', `/agent/orders/${id}/complete`, { lease_token: token, bot_version: botVersion });
+      log(r.status === 200 ? 'completed' : 'complete rejected', { order: id, status: r.status, data: r.data });
+      return r.status === 200;
+    },
+    fail: async (code, message) => {
+      await api('POST', `/agent/orders/${id}/fail`, { lease_token: token, code, message });
+    },
+  };
+  try {
+    await running.run(ctx);
+  } catch (err) {
+    // โค้ดบอทในแพ็กเกจโยน error → รายงานให้ server ตัดสินตาม retry policy
+    log('bot code threw', { order: id, err: (err as Error).message });
+    await ctx.fail('BOT_CODE_ERROR', (err as Error).message);
   }
-
-  // ทำงานจริง: ต่อ lease ระหว่างทำ ถ้า lease หาย (ถูกคืนคิว) ให้หยุดทันที
-  const steps = Math.max(1, Math.round(WORK_MS / 1000));
-  for (let i = 0; i < steps; i++) {
-    await sleep(WORK_MS / steps);
-    const lease = await api('POST', `/agent/orders/${id}/lease`, { lease_token: token });
-    if (lease.status !== 200) return log('lease lost, aborting', { order: id });
-  }
-  const topup = await api('POST', '/agent/provider/topup', { topup_key: job.topup_key, external_order_id: id });
-  if (topup.status !== 200) return void (await fail('PROVIDER_DOWN', JSON.stringify(topup.data)));
-  if (topup.data.duplicate) log('provider: already topped up by previous attempt — not charging again', { order: id });
-
-  if (job.player_uid === 'TOPUPCRASH001' && job.attempt === 1) {
-    return log('simulating crash after top-up, before complete', { order: id });
-  }
-  const done = await api('POST', `/agent/orders/${id}/complete`, { lease_token: token });
-  log(done.status === 200 ? 'completed' : 'complete rejected', { order: id, status: done.status, data: done.data });
 }
 
+loadInstalledBot();
 connect();
 setInterval(() => void workLoopOnce(), POLL_MS);
 process.on('SIGINT', () => process.exit(0));

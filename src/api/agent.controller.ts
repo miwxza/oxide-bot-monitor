@@ -4,7 +4,7 @@ import type { Request, Response } from 'express';
 import { WorkService } from '../agent/work.service';
 import { AgentGuard } from '../common/auth';
 import { DeployService } from '../deploy/deploy.service';
-import { FailDto, LeaseDto, ProviderTopupDto } from '../dto';
+import { CompleteDto, FailDto, LeaseDto, ProviderTopupDto } from '../dto';
 
 const botId = (req: Request) => (req as any).botId as string;
 
@@ -36,8 +36,8 @@ export class AgentController {
 
   @Post('orders/:id/complete')
   @HttpCode(200)
-  complete(@Param('id') id: string, @Body() dto: LeaseDto, @Req() req: Request) {
-    return this.work.complete(botId(req), id, dto.lease_token);
+  complete(@Param('id') id: string, @Body() dto: CompleteDto, @Req() req: Request) {
+    return this.work.complete(botId(req), id, dto.lease_token, dto.bot_version);
   }
 
   @Post('orders/:id/fail')

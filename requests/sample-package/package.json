@@ -1,0 +1,6 @@
+{
+  "name": "oxide-bot",
+  "version": "2.0.0",
+  "description": "ตัวอย่างโค้ดบอทสำหรับทดสอบระบบอัปเดตโค้ด — agent โหลด main แล้วเรียก run(ctx) ทุกออเดอร์",
+  "main": "bot.js"
+}

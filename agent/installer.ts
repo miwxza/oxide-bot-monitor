@@ -4,7 +4,8 @@
  *   <baseDir>/releases/<version>/   ไฟล์ที่แตกจาก zip (เก็บไว้ 3 ชุดล่าสุดไว้ย้อนกลับ)
  *   <baseDir>/current.json          เวอร์ชันที่ใช้งานอยู่ — สลับแบบ atomic (เขียนไฟล์ชั่วคราวแล้ว rename)
  *
- * แตกลงโฟลเดอร์ชั่วคราวก่อน ถ้าพังกลางทางเวอร์ชันเดิมยังใช้งานได้ตามปกติ
+ * แตกลงโฟลเดอร์ชั่วคราวก่อน แล้วให้ verify() ตรวจ (เช่น โหลดโค้ดบอทได้จริง) ก่อนสลับ
+ * ถ้าพังหรือ verify ไม่ผ่าน เวอร์ชันเดิมยังใช้งานได้ตามปกติ
  */
 import AdmZip from 'adm-zip';
 import { existsSync, mkdirSync, readdirSync, readFileSync, renameSync, rmSync, statSync, writeFileSync } from 'node:fs';
@@ -28,7 +29,13 @@ export function readCurrent(baseDir: string): CurrentRelease | null {
   }
 }
 
-export function installPackage(baseDir: string, version: string, filename: string, zipBuf: Buffer): CurrentRelease {
+export function installPackage(
+  baseDir: string,
+  version: string,
+  filename: string,
+  zipBuf: Buffer,
+  verify?: (releaseDir: string) => void,
+): CurrentRelease {
   const releases = join(baseDir, 'releases');
   const target = join(releases, version);
   const current = readCurrent(baseDir);
@@ -62,6 +69,7 @@ export function installPackage(baseDir: string, version: string, filename: strin
         writeFileSync(dest, e.getData());
       }
     }
+    verify?.(tmp);
     rmSync(target, { recursive: true, force: true });
     renameSync(tmp, target);
   } catch (err) {

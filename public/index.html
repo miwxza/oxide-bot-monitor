@@ -366,7 +366,7 @@ async function showOrder(id) {
       h('h2', {}, 'ประวัติออเดอร์'),
       table([[(r) => fmtTime(r.created_at), 'เวลา'], ['event_type', 'เหตุการณ์'],
         [(r) => r.payload?.from ? `${r.payload.from} → ${r.payload.to}` : '', 'สถานะ'],
-        [(r) => [r.payload?.reason, r.payload?.bot_id, r.payload?.code].filter(Boolean).join(' · '), 'รายละเอียด']], events));
+        [(r) => [r.payload?.reason, r.payload?.bot_id, r.payload?.code, r.payload?.bot_version].filter(Boolean).join(' · '), 'รายละเอียด']], events));
     $('detail').showModal();
   } catch (e) { toast(e.message, true); }
 }

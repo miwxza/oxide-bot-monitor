@@ -55,7 +55,7 @@ npm run agents           # terminal 3: บอท 3 เครื่อง
 docker compose run --rm --build test
 ```
 
-**64 เทสต์** (unit 22 + integration 42 บน PostgreSQL จริง) ใช้เวลาประมาณ 30 วินาที
+**77 เทสต์** (unit 33 + integration 44 บน PostgreSQL จริง) ใช้เวลาประมาณ 1 นาที
 
 หรือในเครื่อง: `docker compose up -d postgres` แล้ว `npm test` (เทสต์สร้างฐานข้อมูล `oxide_test` แยกให้เอง)
 
@@ -171,8 +171,22 @@ PENDING_PAYMENT ──(จ่ายแล้ว)──► QUEUED ──(bot clai
 - **คำสั่ง start/stop/restart**: บันทึกลงคิวก่อน แล้ว executor ค่อยส่งให้ simulator รับ `Idempotency-Key` (กดซ้ำ/network retry ได้คำสั่งเดิม) และ unique index ให้เครื่องหนึ่งมีคำสั่งค้างได้ทีละ 1 (กด start กับ stop พร้อมกัน → ตัวหนึ่ง `409 COMMAND_IN_PROGRESS`)
 - **อัปเดตโค้ด**: ไฟล์เดิม (sha256 เดิม) อัปโหลดซ้ำได้แพ็กเกจเดิม, เครื่องหนึ่งมีการอัปเดตที่ยังไม่จบได้ทีละ 1, เครื่องที่ใช้เวอร์ชันนั้นอยู่แล้วได้ `already_current`
   - server บันทึก `sent` **ก่อน**ส่งคำสั่ง แล้วถ้า agent ออฟไลน์ค่อยคืนเป็น `queued` แบบมีเงื่อนไข — เดิมบันทึก `sent` หลังส่ง ถ้า agent ตอบเร็วจะทับ `applied` (มีเทสต์จำลองจังหวะนี้)
-  - agent ดาวน์โหลด → ตรวจ sha256 → แตก zip ลงโฟลเดอร์ชั่วคราว (กัน zip-slip `../` และ zip bomb) → ย้ายเป็น `releases/<version>/` → สลับ `current.json` แบบ atomic → ack และเก็บ release ล่าสุด 3 ชุดไว้ย้อนกลับ ถ้าพังกลางทาง เวอร์ชันเดิมยังใช้งานต่อได้
-  - agent ไม่สลับโค้ดระหว่างทำออเดอร์ (รอให้งานที่ถืออยู่จบ และหยุดรับงานใหม่ระหว่างติดตั้ง) และจำเวอร์ชันที่ติดตั้งไว้ข้ามการ restart
+  - agent ดาวน์โหลด → ตรวจ sha256 → แตก zip ลงโฟลเดอร์ชั่วคราว (กัน zip-slip `../` และ zip bomb) → **ลองโหลดโค้ดบอทจากแพ็กเกจ** → ย้ายเป็น `releases/<version>/` → สลับ `current.json` แบบ atomic → **ออเดอร์ถัดไปรันด้วยโค้ดใหม่** → ack — แพ็กเกจที่โหลดไม่ได้ถูกปฏิเสธ (`failed`) และเครื่องใช้เวอร์ชันเดิมต่อ
+  - agent ไม่สลับโค้ดระหว่างทำออเดอร์ (รอให้งานที่ถืออยู่จบ และหยุดรับงานใหม่ระหว่างติดตั้ง), จำเวอร์ชันข้ามการ restart และรายงานเวอร์ชันจริงใน heartbeat ทุกครั้ง (รวมถึง `builtin`) — ถ้าเครื่องเสียไฟล์ที่ติดตั้งไว้ server จะรู้และ deploy ซ้ำได้ ไม่ติด `already_current`
+  - ทุกออเดอร์ที่จบบันทึก `bot_version` (เช่น `oxide-bot@2.0.0`) ใน timeline จึงตรวจได้ว่าโค้ดเวอร์ชันไหนทำงานนั้น
+
+**สัญญาของแพ็กเกจโค้ดบอท** (ตัวอย่าง: `requests/sample-package/` → `requests/sample-package.zip`):
+
+```js
+// package.json: { "name": "oxide-bot", "version": "2.0.0", "main": "bot.js" }
+module.exports = {
+  async run(ctx) {
+    // ctx.job, ctx.extendLease(), ctx.topup(), ctx.complete(), ctx.fail(code, msg), ctx.sleep(ms), ctx.log(msg)
+  },
+};
+```
+
+agent (supervisor) ดูแล WebSocket / heartbeat / claim / lease / การติดตั้ง ส่วนโค้ดบอททำงานผ่าน `ctx` เท่านั้น จึงอัปเดตโค้ดบอทได้โดยไม่ต้องอัปเดต agent ถ้าโค้ดบอทโยน error ระหว่างทำงาน agent รายงาน `BOT_CODE_ERROR` (retry แบบจำกัดครั้ง) ถ้ายังไม่เคยได้รับแพ็กเกจ ใช้โค้ดในตัว (`agent/builtin-bot.ts`)
 - ทุกคำสั่งของแอดมินบันทึก `audit_logs` พร้อมชื่อผู้กด (`X-Actor`)
 
 **เหตุผล:** การส่ง kill-switch ผ่าน WebSocket อย่างเดียวมีช่วงที่ข้อความยังไปไม่ถึงเครื่อง ระหว่างนั้นเครื่องยังรับงานได้ จึงต้องบังคับที่จุดเดียวที่ทุกเครื่องต้องผ่าน (claim)
@@ -259,11 +273,12 @@ src/
   realtime/     WebSocket agent + dashboard, snapshot
   jobs/         งานเบื้องหลัง
   api/          controllers
-agent/          bot agent จำลอง (bot-agent.ts) + fleet.ts รันหลายเครื่อง
+agent/          bot agent: bot-agent.ts (supervisor), installer.ts (ติดตั้ง zip), bot-module.ts (โหลดโค้ดบอทจากแพ็กเกจ),
+                builtin-bot.ts (โค้ดบอทในตัว), fleet.ts รันหลายเครื่อง
 public/         dashboard (HTML + JS ไม่มี build step)
 db/             schema.sql, seed.sql (จาก pack) + migrations/
 test/           unit + integration (Postgres จริง)
-requests/       oxide.http + ไฟล์ zip ตัวอย่าง
+requests/       oxide.http + sample-package/ (โค้ดบอทตัวอย่าง v2.0.0) และ sample-package.zip
 ```
 
 ---
@@ -278,6 +293,7 @@ requests/       oxide.http + ไฟล์ zip ตัวอย่าง
 - **รันระบบจริงครบทุกเคส** (Docker Compose + บอท 3 เครื่อง + simulator) ก่อนเขียน README: ปิด process บอทจริงเพื่อดู heartbeat timeout, เปิดเครื่องที่ออฟไลน์กลับมาเพื่อดูว่าได้อัปเดตโค้ดที่ค้าง
 - เทสต์ที่เขียนพังในรอบแรก 1 ตัวเพราะข้อมูลทดสอบผิด (validation ของ API ถูกต้องแล้ว) — แก้ที่เทสต์ ไม่ใช่ลดความเข้มของ API
 - **review โค้ดซ้ำหลังเสร็จ** แล้วพบ race condition 2 จุดที่เทสต์ชุดแรกไม่ครอบคลุม (บอทเดียวรับหลายออเดอร์พร้อมกัน, สถานะ deployment `sent` ทับ `applied`) — เขียนเทสต์ที่ทำให้บั๊กเกิดซ้ำได้ก่อน เห็นเทสต์พัง แล้วจึงแก้
+- ทดสอบการอัปเดตโค้ดกับ Docker จริงแล้วพบว่า เมื่อเครื่องเสียไฟล์ที่ติดตั้งไว้ server ยังจำเวอร์ชันเก่า ทำให้ deploy ซ้ำไม่ได้ (`already_current`) — แก้ให้ agent รายงานเวอร์ชันจริงทุก heartbeat และเก็บไฟล์ติดตั้งใน volume
 
 ## ข้อจำกัด
 
@@ -285,4 +301,4 @@ requests/       oxide.http + ไฟล์ zip ตัวอย่าง
 - Provider เติมเกมและธนาคารเป็นของจำลอง (`/agent/provider/topup`, `/dev/orders/{id}/pay`)
 - เก็บไฟล์ zip ในฐานข้อมูล (`bytea`, จำกัด 20 MB) — ไฟล์ใหญ่ควรย้ายไป object storage
 - ยังไม่มีระบบคืนเงิน: ออเดอร์ที่จ่ายหลังหมดเวลาค้างเป็น `EXPIRED` + alert ให้แอดมินคืนเงินเอง
-- agent จำลองแตก zip และสลับเวอร์ชันจริง แต่ตัว agent ไม่ได้รันโค้ดจากแพ็กเกจ (logic บอทจำลองอยู่ใน agent เอง) — บอทจริงต้อง restart process ให้โหลดโค้ดจาก `releases/<version>/` หลังสลับ `current.json`
+- โค้ดบอทจากแพ็กเกจรันใน process เดียวกับ agent (โหลดใหม่ระหว่างออเดอร์) — production ควรแยกเป็น child process / sandbox และจำกัดสิทธิ์ เพราะแพ็กเกจคือโค้ดที่รันได้ (ตอนนี้ป้องกันด้วยการให้เฉพาะแอดมินอัปโหลด + ตรวจ sha256)
